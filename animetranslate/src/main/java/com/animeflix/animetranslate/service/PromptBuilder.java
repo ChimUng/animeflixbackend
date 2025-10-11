@@ -22,6 +22,7 @@ public class PromptBuilder {
     private static final Pattern SEASON_PATTERN = Pattern.compile("(season|mùa|s|phần)[\\s\\-]*(\\d+)", Pattern.CASE_INSENSITIVE);
 
 //    Hàm bốc tách list TranslateResponse dạng en thành aniId,title,description sau đó gửi cho GeminiClient để thực hiện tiếp
+//    Hàm stream() để gom data đầu vào(transresquest) thành một object chứa nhiều requests
     public List<Map<String, String>> build(List<TranslationRequest> requests) {
         return requests.stream()
                 .map(this::buildPromptForRequest)

@@ -12,7 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class AppConfig {
 
     @Bean
-    public WebClient webClient() {
+    public WebClient webClient()    {
         return WebClient.builder()
                 .baseUrl("https://graphql.anilist.co")
                 .defaultHeader("Content-Type", "application/json")
