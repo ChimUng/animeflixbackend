@@ -17,6 +17,9 @@ public class ExternalApiConfig {
     @Value("${zoro.uri}")
     private String zoroUri;
 
+    @Value("${gogo.uri}")
+    private String gogoUri;
+
     @Value("${anify.url}")
     private String anifyUrl;
 
@@ -43,6 +46,12 @@ public class ExternalApiConfig {
     public WebClient zoroWebClient() {
         return WebClient.builder().baseUrl(zoroUri).build();
     }
+
+    @Bean
+    public WebClient gogoWebClient() {
+        return WebClient.builder().baseUrl(gogoUri).build();
+    }
+
 
     @Bean
     public WebClient anifyWebClient() {
