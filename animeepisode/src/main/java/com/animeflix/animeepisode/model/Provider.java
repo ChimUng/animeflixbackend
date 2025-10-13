@@ -14,5 +14,5 @@ public class Provider {
     private String providerId;
     private String id;
     private Boolean consumet;
-    private Map<String, List<Episode>> episodes;  // "sub" -> List<Episode>, "dub" -> List<Episode>
+    private Object episodes;  // "sub" -> List<Episode>, "dub" -> List<Episode>
 }

@@ -29,7 +29,7 @@ public class RedisEpisodeRepository {
                 .onErrorMap(e -> new CacheException("Error getting cache for key: " + key, e));
     }
 
-    public Mono<Void> setCachedData(String key, List<Provider> data, long cacheTimeSeconds) {
+    public <T> Mono<Void> setCachedData(String key, T data, long cacheTimeSeconds) {
         try {
             String json = objectMapper.writeValueAsString(data);
             return reactiveRedisTemplate.opsForValue()
