@@ -166,7 +166,7 @@ public class EpisodeService {
     }
 
     /**
-     * Combine episode list from providers with image/meta data.
+     * Combine episode list from providers with image,merge data
      * Handles providers whose .episodes is either:
      *   - List<Episode>
      *   - Map<String, List<Episode>> (sub/dub)

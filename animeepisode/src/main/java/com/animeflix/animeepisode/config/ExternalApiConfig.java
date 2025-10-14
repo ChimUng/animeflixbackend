@@ -3,6 +3,7 @@ package com.animeflix.animeepisode.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
@@ -32,6 +33,13 @@ public class ExternalApiConfig {
     @Value("${anify.schedule.url}")
     private String anifyScheduleUrl;
 
+    private ExchangeStrategies exchangeStrategies() {
+        return ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+                .build();
+    }
+
+
     @Bean
     public WebClient consumetWebClient() {
         return WebClient.builder().baseUrl(consumetUri).build();
@@ -39,7 +47,7 @@ public class ExternalApiConfig {
 
     @Bean
     public WebClient malsyncWebClient() {
-        return WebClient.builder().baseUrl(malsyncUri).build();
+        return WebClient.builder().baseUrl(malsyncUri).exchangeStrategies(exchangeStrategies()).build();
     }
 
     @Bean
@@ -55,7 +63,7 @@ public class ExternalApiConfig {
 
     @Bean
     public WebClient anifyWebClient() {
-        return WebClient.builder().baseUrl(anifyUrl).build();
+        return WebClient.builder().baseUrl(anifyUrl).exchangeStrategies(exchangeStrategies()).build();
     }
 
     @Bean
@@ -65,7 +73,7 @@ public class ExternalApiConfig {
 
     @Bean
     public WebClient animappingWebClient() {
-        return WebClient.builder().baseUrl(animappingUrl.split("\\?")[0]).build();  // Base without query
+        return WebClient.builder().baseUrl(animappingUrl.split("\\?")[0]).exchangeStrategies(exchangeStrategies()).build();  // Base without query
     }
 
     @Bean
