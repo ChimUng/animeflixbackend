@@ -10,11 +10,10 @@ import java.util.Map;
 @Data
 public class EpisodeMeta {
     @JsonProperty("number") private Integer number;
-    @JsonProperty("episode") private Integer episode;
+    @JsonProperty("episode") private String episode;
     @JsonProperty("img") private String img;
     @JsonProperty("image") private String image;
-    @JsonProperty("title") private String title;  // Simplified
-    @JsonProperty("titles") private Map<String, String> titles = new HashMap<>();  // NEW: Multi-lang { "ja": "...", "en": "...", "x-jat": "..." }
+    @JsonProperty("title") private Map<String, String> titles = new HashMap<>();  // NEW: Multi-lang { "ja": "...", "en": "...", "x-jat": "..." }
     @JsonProperty("description") private String description;
     @JsonProperty("overview") private String overview;
     @JsonProperty("summary") private String summary;

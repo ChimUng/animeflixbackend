@@ -52,14 +52,32 @@ public class AniZipClient {
                     Iterator<Map.Entry<String, JsonNode>> fields = episodesNode.fields();
                     while (fields.hasNext()) {
                         Map.Entry<String, JsonNode> entry = fields.next();
-                        String epKey = entry.getKey();  // e.g., "1"
+                        String epKey = entry.getKey();  // e.g., "1" or "S2"
                         JsonNode epNode = entry.getValue();
 
                         EpisodeMeta meta = objectMapper.convertValue(epNode, EpisodeMeta.class);
-                        meta.setNumber(Integer.valueOf(epKey));  // Set episode number from key
+                        // Set episode from key if not set (though JSON has "episode" as String)
+                        if (meta.getEpisode() == null) {
+                            meta.setEpisode(epKey);
+                        }
+
+                        // Set number: Try parse from epKey; set null for specials like "S2"
+                        try {
+                            meta.setNumber(Integer.valueOf(epKey));
+                        } catch (NumberFormatException e) {
+                            meta.setNumber(null);  // Skip parse error for specials
+                        }
+
                         meta.setTitles(extractTitlesFromEp(epNode.path("title")));  // Multi-lang titles per ep
-                        meta.setDescription(epNode.path("overview").asText(""));  // overview as desc
-                        meta.setImage(epNode.path("image").asText(""));
+
+                        // Set description: Prefer "summary" (most entries), fallback "overview" (early only)
+                        String desc = epNode.path("summary").asText(null);
+                        if (desc == null || desc.isBlank()) {
+                            desc = epNode.path("overview").asText("");
+                        }
+                        meta.setDescription(desc);
+
+                        meta.setImage(epNode.path("image").asText(""));  // Only in early eps
 
                         metas.add(meta);
                     }

@@ -44,8 +44,8 @@ public class EpisodeService {
     public Mono<EpisodeResponse> getEpisodes(String id, boolean releasing, boolean refresh) {
         long cacheTime = releasing ? Duration.ofHours(3).getSeconds() : Duration.ofDays(45).getSeconds();
 
-        Mono<String> cachedMono = redisRepository.getCachedData("episode:" + id);
-        Mono<String> metaMono = redisRepository.getCachedData("info:" + id);
+        Mono<String> cachedMono = redisRepository.getCachedData("episodes:" + id);
+        Mono<String> metaMono = redisRepository.getCachedData("meta:" + id);
 
         return Mono.zip(cachedMono, metaMono)
                 .filter(tuple -> !refresh)
@@ -175,7 +175,14 @@ public class EpisodeService {
         Map<Integer, EpisodeMeta> episodeImages = new HashMap<>();
         if (imageData != null) {
             imageData.forEach(image -> {
-                Integer key = image.getNumber() != null ? image.getNumber() : image.getEpisode();
+                Integer key = image.getNumber();
+                if (key == null && image.getEpisode() != null) {
+                    try {
+                        key = Integer.parseInt(image.getEpisode());
+                    } catch (NumberFormatException e) {
+                        key = null;  // Skip specials
+                    }
+                }
                 if (key != null) episodeImages.put(key, image);
             });
         }
