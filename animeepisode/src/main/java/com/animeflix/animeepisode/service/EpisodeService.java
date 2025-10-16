@@ -52,8 +52,8 @@ public class EpisodeService {
                 .flatMap(tuple -> {
                     List<Provider> providers = parseJsonToList(tuple.getT1(), Provider.class);
                     List<EpisodeMeta> metas = parseJsonToList(tuple.getT2(), EpisodeMeta.class);
-                    if (providers.isEmpty()) redisRepository.deleteKey("episode:" + id).subscribe();
-                    if (metas.isEmpty()) redisRepository.deleteKey("info:" + id).subscribe();
+                    if (providers.isEmpty()) redisRepository.deleteKey("episodes:" + id).subscribe();
+                    if (metas.isEmpty()) redisRepository.deleteKey("meta:" + id).subscribe();
                     return Mono.just(combineEpisodeMeta(providers, metas));
                 })
                 .switchIfEmpty(performFreshFetch(id, cacheTime));
@@ -122,8 +122,8 @@ public class EpisodeService {
                                 EpisodeResponse response = combineEpisodeMeta(validProviders, meta);
 
                                 // Cache both provider list and meta (assumes repository.setCachedData is generic)
-                                redisRepository.setCachedData("episode:" + id, validProviders, cacheTime)
-                                        .then(redisRepository.setCachedData("info:" + id, meta, cacheTime))
+                                redisRepository.setCachedData("episodes:" + id, validProviders, cacheTime)
+                                        .then(redisRepository.setCachedData("meta:" + id, meta, cacheTime))
                                         .doOnError(err -> {
                                             // log or handle cache write errors (avoid silent fails)
                                             System.err.println("Cache write failed for id " + id + ": " + err.getMessage());

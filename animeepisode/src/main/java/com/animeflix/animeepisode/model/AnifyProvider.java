@@ -7,5 +7,20 @@ import lombok.Data;
 @Data
 public class AnifyProvider {
     private String providerId;
-    private Map<String, List<AnifyEpisode>> episodes;  // or List<AnifyEpisode>
+    private List<AnifyEpisode> episodes;
 }
+
+/*
+    example:
+    {
+        "providerId":"zoro"
+        "episodes":[
+            {
+            "id":"21"
+            "episodeId":"1044"
+            .....
+            ->remain props key in AnifyEpisode DTO
+            }
+        ]
+    }
+ */

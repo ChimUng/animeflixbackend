@@ -7,11 +7,12 @@ import lombok.Data;
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AnifyEpisode {
-    @JsonProperty("id") private String id;
-    @JsonProperty("episodeId") private String episodeId;
-    @JsonProperty("number") private Integer number;
-    @JsonProperty("title") private String title;
-    @JsonProperty("isFiller") private Boolean isFiller;
+    @JsonProperty("id") private String id; // id anime
+    @JsonProperty("episodeId") private String episodeId; // id anime episode
+    @JsonProperty("number") private Integer number; // episode number
+    @JsonProperty("title") private String title; // title not same description !!!
+    @JsonProperty("isFiller") private Boolean isFiller; // special episode
     @JsonProperty("image") private String image;
-    @JsonProperty("description") private String description;
+    @JsonProperty("description") private String description; //descrip per episode
+//    [....] also need more fiends
 }

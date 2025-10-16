@@ -8,7 +8,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
@@ -29,8 +28,9 @@ public class AnifyClient {
                 .filter(ep -> !"9anime".equals(ep.getProviderId()))
                 .map(ep -> {
                     String providerId = "gogoanime".equals(ep.getProviderId()) ? "gogobackup" : ep.getProviderId();
-                    Map<String, List<Episode>> episodes = ep.getEpisodes().entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(this::toEpisode).collect(Collectors.toList())));
+                    List<Episode> episodes = ep.getEpisodes().stream()
+                                    .map(this::toEpisode)
+                                    .collect(Collectors.toList());
                     return new Provider(providerId, providerId, false, episodes);
                 })
                 .collectList()
