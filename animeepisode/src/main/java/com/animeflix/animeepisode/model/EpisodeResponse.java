@@ -10,5 +10,4 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EpisodeResponse {
     private List<Provider> providers;
-    private List<EpisodeMeta> meta;
 }
