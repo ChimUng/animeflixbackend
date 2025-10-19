@@ -1,6 +1,8 @@
 package com.animeflix.animeepisode.service;
 
-import com.animeflix.animeepisode.service.*;
+import com.animeflix.animeepisode.repository.RedisEpisodeRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.animeflix.animeepisode.exception.EpisodeFetchException;
 import com.animeflix.animeepisode.model.*;
 import org.slf4j.Logger;
@@ -23,6 +25,8 @@ public class EpisodeService {
     private final ConsumetClient consumetClient;
     private final AnifyClient anifyClient;
     private final AniZipClient aniZipClient;
+    private final RedisEpisodeRepository redisRepository;
+    private final ObjectMapper objectMapper;
 
     public EpisodeService(
             MalSyncClient malSyncClient,
@@ -30,7 +34,9 @@ public class EpisodeService {
             GogoanimeClient gogoanimeClient,
             ConsumetClient consumetClient,
             AnifyClient anifyClient,
-            AniZipClient aniZipClient
+            AniZipClient aniZipClient,
+            RedisEpisodeRepository redisRepository,
+            ObjectMapper objectMapper
     ) {
         this.malSyncClient = malSyncClient;
         this.zoroClient = zoroClient;
@@ -38,35 +44,131 @@ public class EpisodeService {
         this.consumetClient = consumetClient;
         this.anifyClient = anifyClient;
         this.aniZipClient = aniZipClient;
+        this.redisRepository = redisRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
      * Fetch episodes từ các provider + AniZip metadata → merge → return EpisodeResponse.
+     * Fetch episodes with caching logic.
      */
-    public Mono<EpisodeResponse> fetchEpisodes(String animeId) {
-        log.info("Fetching episode data for anime ID: {}", animeId);
+    public Mono<EpisodeResponse> fetchEpisodes(String animeId, boolean releasing, boolean refresh) {
+        log.info("Fetching episode data for anime ID: {} (releasing: {}, refresh: {})", animeId, releasing, refresh);
 
+        long cacheTimeSeconds = releasing ? 3 * 60 * 60 : 45 * 24 * 60 * 60; // 3 hours or 45 days
+        String episodeKey = "episode:" + animeId;
+        String metaKey = "meta:" + animeId;
+
+        if (refresh) {
+            // Force refresh: delete old caches if exist
+            return Mono.zip(redisRepository.deleteKey(episodeKey), redisRepository.deleteKey(metaKey))
+                    .then(fetchAndCacheData(animeId, cacheTimeSeconds))
+                    .onErrorResume(e -> {
+                        log.error("Failed to fetch fresh episode data for anime ID: {}", animeId, e);
+                        return Mono.error(new EpisodeFetchException("Fetch failed for ID: " + animeId));
+                    });
+        } else {
+            // Check caches
+            return Mono.zip(
+                            getCachedProviders(episodeKey),
+                            getCachedMeta(metaKey)
+                    ).flatMap(tuple -> {
+                        List<Provider> cachedProviders = tuple.getT1();
+                        List<EpisodeMeta> cachedMeta = tuple.getT2();
+
+                        if (!cachedProviders.isEmpty() && !cachedMeta.isEmpty()) {
+                            // Both cached: combine and return
+                            log.info("Using cached data for anime ID: {}", animeId);
+                            combineEpisodeMeta(cachedProviders, cachedMeta);
+                            return Mono.just(new EpisodeResponse(cachedProviders));
+                        } else {
+                            // Missing some: fetch fresh and cache
+                            return fetchAndCacheData(animeId, cacheTimeSeconds);
+                        }
+                    }).switchIfEmpty(Mono.defer(() -> fetchAndCacheData(animeId, cacheTimeSeconds)))
+                    .onErrorResume(e -> {
+                        log.error("Failed to fetch episode data for anime ID: {}", animeId, e);
+                        return Mono.error(new EpisodeFetchException("Fetch failed for ID: " + animeId));
+                    });
+        }
+    }
+
+    private Mono<List<Provider>> getCachedProviders(String key) {
+        return redisRepository.getCachedData(key)
+                .flatMap(json -> {
+                    try {
+                        List<Provider> providers = objectMapper.readValue(json, new TypeReference<>() {});
+                        return providers != null && !providers.isEmpty() ? Mono.just(providers) : Mono.empty();
+                    } catch (Exception e) {
+                        log.error("Error deserializing providers from cache: {}", key, e);
+                        return redisRepository.deleteKey(key).then(Mono.empty());
+                    }
+                })
+                .defaultIfEmpty(Collections.emptyList());
+    }
+
+    private Mono<List<EpisodeMeta>> getCachedMeta(String key) {
+        return redisRepository.getCachedData(key)
+                .flatMap(json -> {
+                    try {
+                        List<EpisodeMeta> meta = objectMapper.readValue(json, new TypeReference<>() {});
+                        return meta != null && !meta.isEmpty() ? Mono.just(meta) : Mono.empty();
+                    } catch (Exception e) {
+                        log.error("Error deserializing meta from cache: {}", key, e);
+                        return redisRepository.deleteKey(key).then(Mono.empty());
+                    }
+                })
+                .defaultIfEmpty(Collections.emptyList());
+    }
+
+    /**
+     * Fetch fresh data, combine, cache, and return.
+     */
+    private Mono<EpisodeResponse> fetchAndCacheData(String animeId, long cacheTimeSeconds) {
         // 1️⃣ Lấy danh sách Provider từ MalSync (để biết các nguồn như zoro/gogo/anify)
         return malSyncClient.fetchMalSync(animeId)
-                .flatMap(providers -> Mono.zip(
-                        fetchProviderData(providers, animeId),  // Pass animeId cho fallback
-                        aniZipClient.fetchEpisodeMeta(animeId)
-                ))
-                // 2️⃣ Kết hợp dữ liệu từ Provider + Meta
-                .map(tuple -> {
-                    List<Provider> providerData = tuple.getT1();
-                    List<EpisodeMeta> metaList = tuple.getT2();
-
-                    combineEpisodeMeta(providerData, metaList);
-
-                    log.info("Successfully combined episode data for anime ID: {}", animeId);
-                    return new EpisodeResponse(providerData);
+                .flatMap(entries -> {
+                    if (entries.length == 0) {
+                        // Fallback to Consumet + Anify
+                        log.info("No providers from MalSync, falling back to Consumet and Anify for anime ID: {}", animeId);
+                        return Mono.zip(
+                                consumetClient.fetchConsumet(animeId),
+                                anifyClient.fetchAnify(animeId)
+                        ).map(tuple -> {
+                            List<Provider> combined = new ArrayList<>();
+                            combined.add(tuple.getT1());
+                            combined.addAll(tuple.getT2());
+                            return combined;
+                        });
+                    } else {
+                        return fetchProviderData(entries, animeId);
+                    }
                 })
-                .defaultIfEmpty(new EpisodeResponse(Collections.emptyList()))  // Nếu MalSync empty, return empty response
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch episode data for anime ID: {}", animeId, e);
-                    return Mono.error(new EpisodeFetchException("Fresh fetch failed for ID: " + animeId));
-                });
+                .flatMap(providers -> {
+                    if (providers.isEmpty()) {
+                        return Mono.error(new EpisodeFetchException("No providers found for ID: " + animeId));
+                    }
+                    return Mono.zip(
+                            Mono.just(providers),
+                            aniZipClient.fetchEpisodeMeta(animeId)
+                    ).flatMap(tuple -> {
+                        List<Provider> providerData = tuple.getT1();
+                        List<EpisodeMeta> metaList = tuple.getT2();
+
+                        combineEpisodeMeta(providerData, metaList);
+
+                        // Cache providers and meta separately
+                        String episodeKey = "episode:" + animeId;
+                        String metaKey = "meta:" + animeId;
+
+                        return Mono.zip(
+                                redisRepository.setCachedData(episodeKey, providerData, cacheTimeSeconds),
+                                redisRepository.setCachedData(metaKey, metaList, cacheTimeSeconds)
+                        ).then(Mono.just(new EpisodeResponse(providerData)));
+                    });
+                })
+                .doOnSuccess(response -> log.info("Successfully fetched and cached episode data for anime ID: {}", animeId))
+                .defaultIfEmpty(new EpisodeResponse(Collections.emptyList()));
     }
 
     /**
@@ -77,14 +179,14 @@ public class EpisodeService {
                 .flatMap(entry -> fetchSingleProvider(entry, animeId))  // Fetch parallel mỗi entry
                 .filter(Objects::nonNull)
                 .collectList()
-                .flatMap(list -> {
-                    if (list.isEmpty()) {
-                        log.info("No Zoro or Gogoanime providers found, falling back to Anify for anime ID: {}", animeId);
-                        return anifyClient.fetchAnify(animeId);
-                    } else {
-                        return Mono.just(list);
-                    }
-                })
+//                .flatMap(list -> {
+//                    if (list.isEmpty()) {
+//                        log.info("No Zoro or Gogoanime providers found, falling back to Anify for anime ID: {}", animeId);
+//                        return anifyClient.fetchAnify(animeId);
+//                    } else {
+//                        return Mono.just(list);
+//                    }
+//                }) chuyển logic fallback len hàm fetchandgetcachedata
                 .defaultIfEmpty(Collections.emptyList());
     }
 
