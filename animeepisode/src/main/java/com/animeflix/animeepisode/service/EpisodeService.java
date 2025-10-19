@@ -77,6 +77,14 @@ public class EpisodeService {
                 .flatMap(entry -> fetchSingleProvider(entry, animeId))  // Fetch parallel mỗi entry
                 .filter(Objects::nonNull)
                 .collectList()
+                .flatMap(list -> {
+                    if (list.isEmpty()) {
+                        log.info("No Zoro or Gogoanime providers found, falling back to Anify for anime ID: {}", animeId);
+                        return anifyClient.fetchAnify(animeId);
+                    } else {
+                        return Mono.just(list);
+                    }
+                })
                 .defaultIfEmpty(Collections.emptyList());
     }
 
@@ -101,7 +109,7 @@ public class EpisodeService {
             case "zoro" -> zoroClient.fetchZoro(id);  // Adjust client để nhận ID thay vì URL
             case "gogoanime" -> gogoanimeClient.fetchGogoanime(id);  // Tương tự, có thể cần sub/dub separate
             case "consumet" -> consumetClient.fetchConsumet(id);
-            case "anify" -> anifyClient.fetchAnify(id);
+//            case "anify" -> anifyClient.fetchAnify(id);
             default -> {
                 log.warn("Unknown provider: {}", providerName);
                 yield Mono.empty();
@@ -142,18 +150,38 @@ public class EpisodeService {
                 .collect(Collectors.toMap(EpisodeMeta::getEpisode, m -> m));
 
         for (Provider provider : providers) {
-            if (provider.getEpisodes() == null) continue;
+            Object episodesObj = provider.getEpisodes();
+            if (episodesObj == null) continue;
 
-            provider.getEpisodes().forEach(episode -> {
-                EpisodeMeta meta = metaMap.get(String.valueOf(episode.getNumber()));
-                if (meta != null) {
-                    episode.setTitle(meta.getTitle() != null && meta.getTitle().containsKey("en")
-                            ? meta.getTitle().get("en")
-                            : episode.getTitle());
-                    episode.setImage(meta.getImage());
-                    episode.setSummary(meta.getSummary());
-                }
-            });
+            if (episodesObj instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Episode> episodes = (List<Episode>) episodesObj;
+                episodes.forEach(episode -> mergeMetaIntoEpisode(episode, metaMap));
+            } else if (episodesObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, List<Episode>> episodesMap = (Map<String, List<Episode>>) episodesObj;
+                episodesMap.values().forEach(episodeList ->
+                        episodeList.forEach(episode -> mergeMetaIntoEpisode(episode, metaMap))
+                );
+            } else {
+                log.warn("Unexpected episodes type for provider {}: {}", provider.getId(), episodesObj.getClass());
+            }
+        }
+    }
+
+    /**
+      * Merge metadata cho một episode duy nhất (in-place).
+     */
+    private void mergeMetaIntoEpisode(Episode episode, Map<String, EpisodeMeta> metaMap) {
+        EpisodeMeta meta = metaMap.get(String.valueOf(episode.getNumber()));
+        if (meta != null) {
+            Map<String, String> titleMap = meta.getTitle();
+            String newTitle = (titleMap != null && titleMap.containsKey("en"))
+                    ? titleMap.get("en")
+                    : episode.getTitle();
+            episode.setTitle(newTitle);
+            episode.setImage(meta.getImage());
+            episode.setDescription(meta.getSummary());
         }
     }
 }
