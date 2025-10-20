@@ -35,7 +35,7 @@ public class AniZipClient {
      * Gọi API AniZip, trả về toàn bộ JSON response
      */
     private Mono<JsonNode> getAniZipResponse(String anilistId) {
-        String uri = "/mappings?anilist_id=" + anilistId;
+        String uri = "/?anilist_id=" + anilistId;
         return animappingWebClient.get()
                 .uri(uri)
                 .retrieve()

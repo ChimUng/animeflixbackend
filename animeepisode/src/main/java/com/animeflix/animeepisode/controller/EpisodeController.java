@@ -47,6 +47,7 @@ public class EpisodeController {
      * Endpoint test để ép refetch dữ liệu và làm mới cache.
      * Ví dụ: POST /api/episodes/20605/refresh
      */
+    @PostMapping("/{animeId}/refresh")
     public Mono<ResponseEntity<EpisodeResponse>> refreshEpisodes(@PathVariable String animeId) {
         // Validation for animeId
         long idValue;
