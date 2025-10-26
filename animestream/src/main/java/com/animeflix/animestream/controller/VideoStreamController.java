@@ -38,20 +38,26 @@ public class VideoStreamController {
             @PathVariable String id,
             @RequestBody StreamRequest request,
             @RequestParam(defaultValue = "false") boolean refresh) {
-        log.info("Received stream request for ID: {}, refresh: {}", id, refresh);
+        log.info("Received stream request for ID: {}, request: {}, refresh: {}", id, request, refresh);
 
         if (id == null || id.isEmpty()) {
             log.warn("Invalid anime ID: {}", id);
-            return Mono.just(ResponseEntity.badRequest().build());
+            return Mono.just(ResponseEntity.badRequest().body(new StreamResponse(false, null)));
         }
 
         return videoStreamService.fetchStream(id, request, refresh)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.noContent().build())
+                .map(response -> {
+                    if (!response.isSuccess() || response.getData() == null) {
+                        return ResponseEntity.status(HttpStatus.NO_CONTENT).body(response);
+                    }
+                    return ResponseEntity.ok(response);
+                })
+                .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT)
+                        .body(new StreamResponse(false, null)))
                 .onErrorResume(StreamFetchException.class, e -> {
                     log.error("Stream fetch error for ID: {}", id, e);
                     return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(new StreamResponse(0, Collections.emptyList())));
+                            .body(new StreamResponse(false, null)));
                 });
     }
 
@@ -59,8 +65,9 @@ public class VideoStreamController {
      * Handle StreamFetchException globally.
      */
     @ExceptionHandler(StreamFetchException.class)
-    public ResponseEntity<String> handleStreamFetchException(StreamFetchException e) {
+    public ResponseEntity<StreamResponse> handleStreamFetchException(StreamFetchException e) {
         log.error("Stream fetch exception: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new StreamResponse(false, null));
     }
 }
