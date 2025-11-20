@@ -1,0 +1,24 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: animeflix-mongo-auth
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-auth-data:/data/db
+    command: --quiet
+
+  auth-service:
+    build: .
+    container_name: animeflix-auth-dev
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      - spring.data.mongodb.uri=mongodb://mongo:27017/animeflix_auth
+      - SPRING_PROFILES_ACTIVE=local
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-auth-data:
