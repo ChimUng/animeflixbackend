@@ -8,4 +8,5 @@ public interface DeveloperRepository extends ReactiveMongoRepository<Developer, 
     Mono<Developer> findByApiKey(String apiKey);
     Mono<Developer> findByAppId(String appId);
     Mono<Developer> findByEmail(String email);
+    Mono<Developer> findByUsername(String username);
 }

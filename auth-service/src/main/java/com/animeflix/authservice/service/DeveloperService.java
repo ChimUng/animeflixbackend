@@ -1,5 +1,7 @@
 package com.animeflix.authservice.service;
 
+import com.animeflix.authservice.DTO.LoginDevRequest;
+import com.animeflix.authservice.DTO.LoginDevResponse;
 import com.animeflix.authservice.DTO.RegisterDevRequest;
 import com.animeflix.authservice.DTO.RegisterDevResponse;
 import com.animeflix.authservice.Entity.Developer;
@@ -42,18 +44,29 @@ public class DeveloperService {
                             dev.setClientId("cli_" + RandomStringUtils.randomAlphanumeric(14));
                             dev.setClientSecret("sec_" + RandomStringUtils.randomAlphanumeric(32));
                             dev.setApiKey("api_" + RandomStringUtils.randomAlphanumeric(28));
-                            dev.setRateLimit(1000);
-                            dev.setIsActive(true);
-                            dev.setProvider("animeflix");
-                            dev.setCreatedAt(LocalDateTime.now());
+                            dev.setLastUsedAt(null);
 
                             log.info("Saving new developer: {}", dev.getAppId());
                             return devRepo.save(dev);
                         })))
-                // DÙNG MAPPER TRẢ RESPONSE → SIÊU GỌN!
-                .map(devMapper::toResponse);
+                .map(devMapper::toRegisterResponse);
     }
 
+    public Mono<LoginDevResponse> loginDeveloper(LoginDevRequest req) {
+        return devRepo.findByUsername(req.getUsername())
+                .switchIfEmpty(Mono.error(new RuntimeException("Invalid email or password")))
+                .flatMap(dev -> {
+                    if (!passwordEncoder.matches(req.getPassword(), dev.getPasswordHash())) {
+                        return Mono.error(new RuntimeException("Invalid username or password"));
+                    }
+                    if (!dev.isActive()) {
+                        return Mono.error(new RuntimeException("Developer account is disabled"));
+                    }
+                    dev.setLastUsedAt(LocalDateTime.now());
+                    return devRepo.save(dev)
+                            .map(devMapper::toLoginResponse);
+                });
+    }
     /**
      * XÁC THỰC API KEY KHI DEV GỌI API
      */

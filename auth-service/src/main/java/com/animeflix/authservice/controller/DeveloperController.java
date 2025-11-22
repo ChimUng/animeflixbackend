@@ -1,5 +1,7 @@
 package com.animeflix.authservice.controller;
 
+import com.animeflix.authservice.DTO.LoginDevRequest;
+import com.animeflix.authservice.DTO.LoginDevResponse;
 import com.animeflix.authservice.DTO.RegisterDevRequest;
 import com.animeflix.authservice.DTO.RegisterDevResponse;
 import com.animeflix.authservice.service.DeveloperService;
@@ -17,9 +19,14 @@ public class DeveloperController {
     private final DeveloperService authService;
 
     @PostMapping("/dev/register")
-    public Mono<ResponseEntity<RegisterDevResponse>> registerDev(
-            @RequestBody RegisterDevRequest req) {
+    public Mono<ResponseEntity<RegisterDevResponse>> registerDev (@RequestBody RegisterDevRequest req) {
         return authService.registerDeveloper(req)
                 .map(resp -> ResponseEntity.status(HttpStatus.CREATED).body(resp));
+    }
+
+    @PostMapping("/dev/login")
+    public Mono<ResponseEntity<LoginDevResponse>> loginDev(@RequestBody LoginDevRequest req) {
+        return authService.loginDeveloper(req)
+                .map(ResponseEntity::ok);
     }
 }
