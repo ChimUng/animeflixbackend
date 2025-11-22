@@ -1,5 +1,6 @@
 package com.animeflix.authservice.config;
 
+import com.animeflix.authservice.filter.ApiKeyAuthenticationFilter;
 import com.animeflix.authservice.filter.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +30,8 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
                                                          ServerSecurityContextRepository securityContextRepository,
-                                                         JwtAuthenticationFilter jwtAuthFilter) {
+                                                         JwtAuthenticationFilter jwtAuthFilter,
+                                                         ApiKeyAuthenticationFilter apiKeyFilter) {
         http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .securityContextRepository(securityContextRepository)
@@ -38,10 +40,13 @@ public class SecurityConfig {
                                 "/api/auth/user/signup",
                                 "/api/auth/user/login",
                                 "/api/auth/user/refresh",
-                                "/api/auth/user/logout"
+                                "/api/auth/user/logout",
+                                "/api/auth/dev/register",
+                                "/api/auth/dev/login"
                         ).permitAll()
-                        .anyExchange().authenticated()
+                        .anyExchange().permitAll()
                 )
+                .addFilterBefore(apiKeyFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .addFilterBefore(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)

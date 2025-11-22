@@ -10,10 +10,12 @@ import com.animeflix.authservice.mapper.DeveloperMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -24,6 +26,7 @@ public class DeveloperService {
     private final DeveloperRepository devRepo;
     private final PasswordEncoder passwordEncoder;
     private final DeveloperMapper devMapper;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
 
     /**
      * ĐĂNG KÝ DEVELOPER – TRẢ VỀ API KEY NGAY
@@ -68,7 +71,25 @@ public class DeveloperService {
                 });
     }
     /**
-     * XÁC THỰC API KEY KHI DEV GỌI API
+     * Hàm kiểm tra Rate Limit với Redis
+     */
+    private Mono<Boolean> checkRateLimit(String apiKey, int limit) {
+        String key = "rate_limit:" + apiKey;
+        return redisTemplate.opsForValue().increment(key)
+                .flatMap(count -> {
+                    if (count == 1) {
+                        return redisTemplate.expire(key, Duration.ofHours(1))
+                                .thenReturn(true);
+                    }
+                    if (count > limit) {
+                        return Mono.just(false);
+                    }
+                    return Mono.just(true);
+                });
+    }
+
+    /**
+     * Validate Key + Rate Limit
      */
     public Mono<Developer> validateApiKey(String apiKey) {
         return devRepo.findByApiKey(apiKey)
@@ -77,8 +98,14 @@ public class DeveloperService {
                     if (!dev.isActive()) {
                         return Mono.error(new RuntimeException("API Key đã bị khóa"));
                     }
-                    dev.setLastUsedAt(LocalDateTime.now());
-                    return devRepo.save(dev).thenReturn(dev);
+                    return checkRateLimit(apiKey, dev.getRateLimit())
+                            .flatMap(isAllowed -> {
+                                if (!isAllowed) {
+                                    return Mono.error(new RuntimeException("Rate limit exceeded (" + dev.getRateLimit() + " req/hour)"));
+                                }
+                                dev.setLastUsedAt(LocalDateTime.now());
+                                return devRepo.save(dev).thenReturn(dev);
+                            });
                 });
     }
 }

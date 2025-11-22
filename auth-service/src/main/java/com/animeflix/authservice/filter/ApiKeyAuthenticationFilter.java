@@ -11,7 +11,7 @@ import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
-public class ApiKeyAuthenticationFilter implements WebFilter {
+public class    ApiKeyAuthenticationFilter implements WebFilter {
 
     private final DeveloperService developerService;
 
@@ -24,7 +24,7 @@ public class ApiKeyAuthenticationFilter implements WebFilter {
         String path = exchange.getRequest().getPath().toString();
 
         // Bỏ qua /api/auth/** (register, login, etc.)
-        if (path.startsWith("/api/auth/")) {
+        if (path.startsWith("/api/auth/") && !path.contains("/dev/test-limit")) {
             return chain.filter(exchange);
         }
 
@@ -45,8 +45,14 @@ public class ApiKeyAuthenticationFilter implements WebFilter {
                     return chain.filter(exchange);
                 })
                 .onErrorResume(err -> {
-                    log.warn("Invalid API Key: {} → {}", apiKey, err.getMessage());
-                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    HttpStatus status = HttpStatus.UNAUTHORIZED;
+
+                    // Nếu lỗi chứa chữ "Rate limit" -> Đổi thành 429
+                    if (err.getMessage().contains("Rate limit")) {
+                        status = HttpStatus.TOO_MANY_REQUESTS;
+                    }
+
+                    exchange.getResponse().setStatusCode(status);
                     return exchange.getResponse()
                             .writeWith(Mono.just(exchange.getResponse()
                                     .bufferFactory()

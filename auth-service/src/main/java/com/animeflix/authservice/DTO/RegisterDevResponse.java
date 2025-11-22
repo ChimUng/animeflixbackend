@@ -11,4 +11,6 @@ public class RegisterDevResponse {
     private String clientId;
     private String clientSecret;
     private String apiKey;
+
+    private String message;
 }

@@ -13,7 +13,7 @@ public interface DeveloperMapper {
     @Mapping(target = "apiKey", ignore = true)
     @Mapping(target = "rateLimit", constant = "1000")
     @Mapping(target = "isActive", constant = "true")
-    @Mapping(target = "provider", defaultValue = "animeflix")
+    @Mapping(target = "provider", constant = "animeflix")
     @Mapping(target = "createdAt", expression = "java(java.time.LocalDateTime.now())")
     Developer toEntity(RegisterDevRequest request);
 

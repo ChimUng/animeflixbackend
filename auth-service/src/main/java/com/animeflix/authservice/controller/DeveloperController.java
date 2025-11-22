@@ -29,4 +29,21 @@ public class DeveloperController {
         return authService.loginDeveloper(req)
                 .map(ResponseEntity::ok);
     }
+
+    /**
+     * API Test Rate Limit
+     * - Nếu gọi được API này -> Filter đã cho qua (Key đúng + Còn lượt)
+     * - Nếu bị chặn -> Filter trả lỗi 429 hoặc 401
+     */
+    @GetMapping("/dev/test-limit")
+    public Mono<ResponseEntity<String>> testRateLimit(@RequestHeader("X-API-KEY") String apiKey) {
+        return authService.validateApiKey(apiKey) // Gọi lại để lấy thông tin (thực tế Filter đã gọi rồi)
+                .map(dev -> {
+                    return ResponseEntity.ok(
+                            "Thành công! Request đã vượt qua Rate Limit.\n" +
+                                    "App: " + dev.getAppName() + "\n" +
+                                    "Limit: " + dev.getRateLimit() + "/h"
+                    );
+                });
+    }
 }
