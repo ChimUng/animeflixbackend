@@ -46,4 +46,21 @@ public class DeveloperController {
                     );
                 });
     }
+
+    /**
+     * API For Gateway caliing with authservice ( Validate APIKEY Controller)
+     * - Nếu gọi được API này -> Filter đã cho qua (Key đúng + Còn lượt)
+     * - Nếu bị chặn -> Filter trả lỗi 429 hoặc 401
+     */
+    @GetMapping("/internal/validate-key")
+    public Mono<ResponseEntity<Void>> validateKeyInternal(@RequestParam("key") String apiKey) {
+        return authService.validateApiKey(apiKey)
+                .map(dev -> ResponseEntity.ok().<Void>build())
+                .onErrorResume(e -> {
+                    if (e.getMessage().contains("Rate limit")) {
+                        return Mono.just(ResponseEntity.status(429).build());
+                    }
+                    return Mono.just(ResponseEntity.status(401).build());
+                });
+    }
 }

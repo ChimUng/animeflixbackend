@@ -42,7 +42,8 @@ public class SecurityConfig {
                                 "/api/auth/user/refresh",
                                 "/api/auth/user/logout",
                                 "/api/auth/dev/register",
-                                "/api/auth/dev/login"
+                                "/api/auth/dev/login",
+                                "/api/auth/internal/**"
                         ).permitAll()
                         .anyExchange().permitAll()
                 )
