@@ -24,7 +24,10 @@ public class    ApiKeyAuthenticationFilter implements WebFilter {
         String path = exchange.getRequest().getPath().toString();
 
         // Bỏ qua /api/auth/** (register, login, etc.)
-        if (path.startsWith("/api/auth/") && !path.contains("/dev/test-limit")) {
+        if (path.startsWith("/api/auth/internal/") ||
+                path.startsWith("/api/auth/dev/register") ||
+                path.startsWith("/api/auth/dev/login") ||
+                path.contains("/actuator")) {
             return chain.filter(exchange);
         }
 

@@ -52,15 +52,15 @@ public class DeveloperController {
      * - Nếu gọi được API này -> Filter đã cho qua (Key đúng + Còn lượt)
      * - Nếu bị chặn -> Filter trả lỗi 429 hoặc 401
      */
-    @GetMapping("/internal/validate-key")
-    public Mono<ResponseEntity<Void>> validateKeyInternal(@RequestParam("key") String apiKey) {
+    @PostMapping("/internal/validate-key")
+    public Mono<ResponseEntity<Void>> validateKeyInternal(@RequestHeader("X-API-KEY") String apiKey) {
         return authService.validateApiKey(apiKey)
                 .map(dev -> ResponseEntity.ok().<Void>build())
                 .onErrorResume(e -> {
-                    if (e.getMessage().contains("Rate limit")) {
-                        return Mono.just(ResponseEntity.status(429).build());
+                    if (e.getMessage() != null && e.getMessage().contains("Rate limit")) {
+                        return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build());
                     }
-                    return Mono.just(ResponseEntity.status(401).build());
+                    return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
                 });
     }
 }
