@@ -1,0 +1,29 @@
+server:
+  port: 4004
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: ${service.auth.url}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=2
+
+        - id: anime-service
+          uri: ${service.anime.url}
+          predicates:
+            - Path=/anime/**
+          filters:
+            - AuthenticationFilter
+            - StripPrefix=1
+
+service:
+  auth:
+    url: http://localhost:8085
+  anime:
+    url: http://localhost:8081
