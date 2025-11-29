@@ -1,5 +1,6 @@
 package com.animeflix.apigateway.filter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpStatus;
@@ -9,6 +10,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 
 @Component
+@Slf4j
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     private final WebClient authServiceWebClient;
@@ -24,14 +26,16 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             ServerHttpRequest request = exchange.getRequest();
             String path = request.getPath().toString();
 
-            if (path.contains("/api/auth/dev/register") ||
-                    path.contains("/api/auth/dev/login") ||
-                    path.contains("/actuator")) {
+            log.info("[Gateway] Request: {} {}", request.getMethod(), path);
+
+            if (path.startsWith("/api/auth/") || path.contains("/actuator")) {
+                log.info("[Gateway] Skip auth filter for: {}", path);
                 return chain.filter(exchange);
             }
 
             String apiKey = request.getHeaders().getFirst("X-API-KEY");
             if (apiKey == null || apiKey.isBlank()) {
+                log.warn("[Gateway] Missing X-API-KEY for {}", path);
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                 return exchange.getResponse().setComplete();
             }
@@ -41,10 +45,14 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     .header("X-API-KEY", apiKey)
                     .retrieve()
                     .toBodilessEntity()
-                    .flatMap(response -> chain.filter(exchange))
+                    .flatMap(response -> {
+                        log.info("[Gateway] API Key validated successfully for {}", path);
+                        return chain.filter(exchange);
+                    })
                     .onErrorResume(e -> {
+                        log.error("[Gateway] API Key validation failed: {}", e.getMessage());
                         HttpStatus status = HttpStatus.UNAUTHORIZED;
-                        if (e.getMessage() != null && e.getMessage().contains("429")) {
+                        if (e.getMessage() != null && e.getMessage().contains("Rate limit")) {
                             status = HttpStatus.TOO_MANY_REQUESTS;
                         }
                         exchange.getResponse().setStatusCode(status);

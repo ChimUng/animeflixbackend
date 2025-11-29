@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/anime")
+@RequestMapping("/")
 public class AnimeController {
 
     private final AnimeService animeService;
