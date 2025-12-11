@@ -9,13 +9,25 @@ services:
     command: --quiet
 
   auth-service:
-    build: .
+    build: auth-service
     container_name: animeflix-auth-dev
     restart: unless-stopped
     ports:
       - "8085:8085"
     environment:
       - spring.data.mongodb.uri=mongodb://mongo:27017/animeflix_auth
+      - SPRING_PROFILES_ACTIVE=local
+    depends_on:
+      - mongo
+
+  anime-catalog-service:
+    build: ./anime-catalog-service
+    container_name: animeflix-catalog
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/animeflix_catalog
       - SPRING_PROFILES_ACTIVE=local
     depends_on:
       - mongo
