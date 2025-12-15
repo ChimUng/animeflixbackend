@@ -44,8 +44,8 @@ public class AnimeSyncService {
     @Scheduled(cron = "0 0 */6 * * ?")
     public void syncAllData() {
         log.info("=== START SYNC DATA ===");
-//        syncFromGraphql("favourite-anime.graphql", Map.of("page", 1, "perPage", 20));
-//        syncFromGraphql("popular-anime.graphql", Map.of("page", 1, "perPage", 20));
+        syncFromGraphql("favourite-anime.graphql", Map.of("page", 1, "perPage", 20));
+        syncFromGraphql("popular-anime.graphql", Map.of("page", 1, "perPage", 20));
 //        syncFromGraphql("popular-movie.graphql", Map.of("page", 1, "perPage", 20));
 //        Map<String, Object> current = getCurrentSeasonAndYear();
 //        syncFromGraphql("popular-this-season.graphql", Map.of("page", 1, "perPage", 20, "season", current.get("season"), "seasonYear", current.get("year")));

@@ -41,7 +41,7 @@ public class AnimeController {
                 .map(data -> ResponseEntity.ok(ApiResponse.ok(data)));
     }
 
-    // 3. Trending
+    // 3. Trending(recent anime)
     @GetMapping("/trending")
     public Mono<ResponseEntity<ApiResponse<List<AnimeResponse>>>> getTrendingAnime(
             @RequestParam(defaultValue = "1") int page,
