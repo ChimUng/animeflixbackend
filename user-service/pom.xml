@@ -63,6 +63,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+            <!-- ✅ EXCLUDE servlet security -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-webmvc</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- JWT -->
@@ -117,6 +124,44 @@
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver-sync</artifactId>
         </dependency>
+
+        <!-- Kafka Consumer -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- REACTIVE WebSocket (không dùng servlet websocket) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-websocket</artifactId>
+        </dependency>
+
+<!--        &lt;!&ndash; Spring Messaging (for STOMP) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework</groupId>-->
+<!--            <artifactId>spring-messaging</artifactId>-->
+<!--        </dependency>-->
+
+        <!-- Reactor Kafka (for reactive consumer) -->
+        <dependency>
+            <groupId>io.projectreactor.kafka</groupId>
+            <artifactId>reactor-kafka</artifactId>
+        </dependency>
+
+<!--        &lt;!&ndash; SockJS (optional - for browser fallback) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.webjars</groupId>-->
+<!--            <artifactId>sockjs-client</artifactId>-->
+<!--            <version>1.5.1</version>-->
+<!--        </dependency>-->
+
+<!--        &lt;!&ndash; STOMP WebSocket (optional) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.webjars</groupId>-->
+<!--            <artifactId>stomp-websocket</artifactId>-->
+<!--            <version>2.3.4</version>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>
