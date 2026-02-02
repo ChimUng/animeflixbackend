@@ -1,73 +1,66 @@
 package com.animeflix.animeepisode.controller;
+
 import com.animeflix.animeepisode.exception.EpisodeFetchException;
-import com.animeflix.animeepisode.model.EpisodeResponse;
+import com.animeflix.animeepisode.model.Provider;
 import com.animeflix.animeepisode.service.EpisodeService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("api/episodes")
+@RequestMapping("/api/episode")
 @CrossOrigin(origins = "*")
+@RequiredArgsConstructor
+@Slf4j
 public class EpisodeController {
+
     private final EpisodeService episodeService;
 
-    public EpisodeController(EpisodeService episodeService) {
-        this.episodeService = episodeService;
-    }
-
     /**
-     * Lấy danh sách tập phim theo ID anime.
-     * Ví dụ: GET /api/episodes/20605?releasing=true&refresh=false
+     * GET /api/episode/{id}?releasing=...&refresh=...
      */
     @GetMapping("/{animeId}")
-    public Mono<ResponseEntity<EpisodeResponse>> getEpisodes(
+    public Mono<ResponseEntity<List<Provider>>> getEpisodes(
             @PathVariable String animeId,
             @RequestParam(defaultValue = "false") boolean releasing,
-            @RequestParam(defaultValue = "false") boolean refresh) {
-        // Validation for animeId: must be a positive integer
-        long idValue;
+            @RequestParam(defaultValue = "false") boolean refresh
+    ) {
+        log.info("📥 GET /api/episode/{} - releasing={}, refresh={}", animeId, releasing, refresh);
+
+        // Validation
         try {
-            idValue = Long.parseLong(animeId);
+            long idValue = Long.parseLong(animeId);
             if (idValue <= 0) {
+                log.warn("⚠️ Invalid animeId: {}", animeId);
                 return Mono.just(ResponseEntity.badRequest().build());
             }
         } catch (NumberFormatException e) {
+            log.warn("⚠️ Invalid animeId format: {}", animeId);
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
         return episodeService.fetchEpisodes(animeId, releasing, refresh)
+                .doOnSuccess(providers -> log.info("✅ Returned {} providers for anime {}",
+                        providers.size(), animeId))
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.noContent().build())
-                .onErrorResume(EpisodeFetchException.class, e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null)));
+                .onErrorResume(EpisodeFetchException.class, e -> {
+                    log.error("❌ Error fetching episodes for {}: {}", animeId, e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                });
     }
 
     /**
-     * Endpoint test để ép refetch dữ liệu và làm mới cache.
-     * Ví dụ: POST /api/episodes/20605/refresh
+     *  POST /api/episode/{id}/refresh - Force refresh
      */
     @PostMapping("/{animeId}/refresh")
-    public Mono<ResponseEntity<EpisodeResponse>> refreshEpisodes(@PathVariable String animeId) {
-        // Validation for animeId
-        long idValue;
-        try {
-            idValue = Long.parseLong(animeId);
-            if (idValue <= 0) {
-                return Mono.just(ResponseEntity.badRequest().build());
-            }
-        } catch (NumberFormatException e) {
-            return Mono.just(ResponseEntity.badRequest().build());
-        }
-
-        return episodeService.fetchEpisodes(animeId, false, true)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.noContent().build())
-                .onErrorResume(EpisodeFetchException.class, e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null)));
-    }
-
-    @ExceptionHandler(EpisodeFetchException.class)
-    public ResponseEntity<String> handleEpisodeFetchException(EpisodeFetchException e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+    public Mono<ResponseEntity<List<Provider>>> refreshEpisodes(@PathVariable String animeId) {
+        log.info("🔄 POST /api/episode/{}/refresh", animeId);
+        return getEpisodes(animeId, false, true);
     }
 }
