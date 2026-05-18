@@ -45,6 +45,7 @@ public class SecurityConfig {
                                 "/api/auth/dev/login",
                                 "/api/auth/internal/**"
                         ).permitAll()
+                        .pathMatchers("/api/auth/user/**").authenticated()
                         .anyExchange().permitAll()
                 )
                 .addFilterBefore(apiKeyFilter, SecurityWebFiltersOrder.AUTHENTICATION)

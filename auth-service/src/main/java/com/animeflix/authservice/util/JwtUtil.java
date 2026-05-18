@@ -90,6 +90,14 @@ public class JwtUtil {
         return parseClaims(token, key).getSubject();
     }
 
+    public String extractUsername(String token) {
+        return parseClaims(token, accessKey).get("username", String.class);
+    }
+
+    public String extractEmail(String token) {
+        return parseClaims(token, accessKey).get("email", String.class);
+    }
+
     public String getJti(String token, boolean isRefresh) {
         SecretKey key = isRefresh ? refreshKey : accessKey;
         return parseClaims(token, key).getId();

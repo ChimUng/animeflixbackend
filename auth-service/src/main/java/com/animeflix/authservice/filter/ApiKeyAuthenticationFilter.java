@@ -27,6 +27,7 @@ public class    ApiKeyAuthenticationFilter implements WebFilter {
         if (path.startsWith("/api/auth/internal/") ||
                 path.startsWith("/api/auth/dev/register") ||
                 path.startsWith("/api/auth/dev/login") ||
+                path.startsWith("/api/auth/user/") ||
                 path.contains("/actuator")) {
             return chain.filter(exchange);
         }
