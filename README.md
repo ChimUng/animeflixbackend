@@ -53,7 +53,6 @@ AniList API      Gemini Embed → MongoDB Vector Search
 | Maven | 3.9+ |
 | Docker & Docker Compose | 24+ |
 | MongoDB | 7.0 (via Docker) |
-| Node.js (optional, cho frontend) | 18+ |
 
 **External services cần có:**
 - [Upstash Redis](https://upstash.com/) — free tier đủ dùng
