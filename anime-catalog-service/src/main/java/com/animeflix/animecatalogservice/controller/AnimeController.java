@@ -1,11 +1,15 @@
 package com.animeflix.animecatalogservice.controller;
 
 import com.animeflix.animecatalogservice.DTO.AnimeDetailResponse;
+import com.animeflix.animecatalogservice.DTO.AnimeEmbedDTO;
 import com.animeflix.animecatalogservice.DTO.AnimeResponse;
 import com.animeflix.animecatalogservice.exception.ApiResponse;
 import com.animeflix.animecatalogservice.exception.NotFoundException;
 import com.animeflix.animecatalogservice.service.AnimeService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +17,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/")
@@ -110,5 +115,14 @@ public class AnimeController {
                 .map(data -> ResponseEntity.ok(ApiResponse.ok(data)))
                 .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body(ApiResponse.error("Error searching anime: " + e.getMessage()))));
+    }
+
+    // Trong AnimeController — thêm endpoint này
+    @GetMapping("/internal/embed-data")
+    public Mono<ResponseEntity<ApiResponse<List<AnimeEmbedDTO>>>> getAnimeForEmbedding(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "200") int perPage) {
+        return animeService.getAnimeForEmbedding(page, perPage)
+                .map(data -> ResponseEntity.ok(ApiResponse.ok(data)));
     }
 }

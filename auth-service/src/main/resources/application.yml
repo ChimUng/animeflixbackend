@@ -6,7 +6,7 @@ spring:
     mongodb:
       uri: mongodb://localhost:27017/animeflix_auth
     redis:
-      url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
+      url: ${REDIS_URL:rediss://default:gQAAAAAAAf4YAAIgcDFjYzVhM2RmYWU2YTk0MGU4OTQwZDk0NTQ2MmJjODNmNg@primary-buffalo-130584.upstash.io:6379}
   codec:
     # Quan trọng: tắt auto content-length
     http:

@@ -1,6 +1,7 @@
 package com.animeflix.animecatalogservice.service;
 
 import com.animeflix.animecatalogservice.DTO.AnimeDetailResponse;
+import com.animeflix.animecatalogservice.DTO.AnimeEmbedDTO;
 import com.animeflix.animecatalogservice.DTO.AnimeResponse;
 import com.animeflix.animecatalogservice.Entity.Anime;
 import com.animeflix.animecatalogservice.Entity.AnimeSchedule;
@@ -214,6 +215,16 @@ public class AnimeService {
                     .map(animeMapper::toResponse)
                     .collect(Collectors.toList());
         }), new TypeReference<>() {});
+    }
+
+    public Mono<List<AnimeEmbedDTO>> getAnimeForEmbedding(int page, int perPage) {
+        return Mono.fromCallable(() -> {
+            Pageable pageable = PageRequest.of(page - 1, perPage,
+                    Sort.by("popularity").descending());
+            return animeRepository.findAll(pageable).stream()
+                    .map(animeMapper::toEmbedDTO)
+                    .collect(Collectors.toList());
+        });
     }
 
     // 10. Get Schedule (Tìm các anime có tập mới trong 7 ngày tới)

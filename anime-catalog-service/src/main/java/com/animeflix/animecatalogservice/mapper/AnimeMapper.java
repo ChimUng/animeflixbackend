@@ -1,6 +1,7 @@
 package com.animeflix.animecatalogservice.mapper;
 
 import com.animeflix.animecatalogservice.DTO.AnimeDetailResponse;
+import com.animeflix.animecatalogservice.DTO.AnimeEmbedDTO;
 import com.animeflix.animecatalogservice.DTO.AnimeResponse;
 import com.animeflix.animecatalogservice.Entity.Anime;
 import org.mapstruct.Mapper;
@@ -153,5 +154,35 @@ public interface AnimeMapper {
                 .filter(r -> r != null) // Bỏ qua null
                 .limit(5)
                 .collect(Collectors.toList());
+    }
+
+    // Thêm vào AnimeMapper.java
+    default AnimeEmbedDTO toEmbedDTO(Anime anime) {
+        if (anime == null) return null;
+
+        String titleRomaji = anime.getTitle() != null ? anime.getTitle().getRomaji() : null;
+        String titleEnglish = anime.getTitle() != null ? anime.getTitle().getEnglish() : null;
+        String titleUserPreferred = anime.getTitle() != null ? anime.getTitle().getUserPreferred() : null;
+        String coverLarge = anime.getCoverImage() != null ? anime.getCoverImage().getLarge() : null;
+        String coverExtraLarge = anime.getCoverImage() != null ? anime.getCoverImage().getExtraLarge() : null;
+
+        return AnimeEmbedDTO.builder()
+                .id(anime.getId())
+                .titleRomaji(titleRomaji)
+                .titleEnglish(titleEnglish)
+                .titleUserPreferred(titleUserPreferred)
+                .description(anime.getDescription())
+                .genres(anime.getGenres())
+                .tags(null)              // Anime entity hiện chưa lưu tags từ AniList
+                .coverImageLarge(coverLarge)
+                .coverImageExtraLarge(coverExtraLarge)
+                .bannerImage(anime.getBannerImage())
+                .averageScore(anime.getAverageScore())
+                .popularity(anime.getPopularity())
+                .status(anime.getStatus())
+                .format(anime.getFormat())
+                .season(anime.getSeason())
+                .seasonYear(anime.getSeasonYear())
+                .build();
     }
 }
