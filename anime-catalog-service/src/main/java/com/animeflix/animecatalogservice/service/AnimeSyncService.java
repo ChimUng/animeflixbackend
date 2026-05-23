@@ -41,78 +41,80 @@ public class AnimeSyncService {
         syncAllData();
     }
 
-    @Scheduled(cron = "0 0 */6 * * ?")
+    @Scheduled(cron = "0 0 2 * * ?") // Chạy lúc 2h sáng mỗi ngày để cập nhật toàn bộ database
     public void syncAllData() {
-        log.info("=== START SYNC DATA ===");
-        syncFromGraphql("favourite-anime.graphql", Map.of("page", 1, "perPage", 20));
-        syncFromGraphql("popular-anime.graphql", Map.of("page", 1, "perPage", 20));
-        syncFromGraphql("popular-movie.graphql", Map.of("page", 1, "perPage", 20));
-        Map<String, Object> current = getCurrentSeasonAndYear();
-        syncFromGraphql("popular-this-season.graphql", Map.of("page", 1, "perPage", 20, "season", current.get("season"), "seasonYear", current.get("year")));
-        Map<String, Object> next = getNextSeasonAndYear();
-        syncFromGraphql("popular-this-season.graphql", Map.of("page", 1, "perPage", 20, "season", next.get("season"), "seasonYear", next.get("year")));
-        syncFromGraphql("seasonal-anime.graphql", Map.of("page", 1, "perPage", 20));
-        syncFromGraphql("top-100-anime.graphql", Map.of("page", 1, "perPage", 20));
-        syncFromGraphql("trending-anime.graphql", Map.of("page", 1, "perPage", 20));
-        syncSchedules();
-        log.info("=== END SYNC DATA ===");
+        log.info("=== START MASTER SYNC ALL ANIME DATA (MULTI-THREADED) ===");
+        try {
+            String query = loadGraphqlQuery("advanced-search.graphql");
+
+            Flux.range(1, 100) // 100 trang x 50 = 5000 bộ
+                    .buffer(4) // TĂNG TỐC: Gom 4 trang thành 1 cục (Multi-thread 4 pages cùng lúc)
+                    .delayElements(Duration.ofSeconds(3)) // Đợi 3s giữa các cục để né Rate Limit (80 req/min)
+                    .flatMap(batch -> Flux.fromIterable(batch)
+                            .flatMap(page -> fetchAnimePage(query, page)) // Thực thi songsong 4 request
+                    )
+                    .takeUntil(response -> {
+                        boolean hasNextPage = response.path("data").path("Page").path("pageInfo").path("hasNextPage").asBoolean(false);
+                        return !hasNextPage;
+                    })
+                    .flatMap(response -> {
+                        JsonNode mediaList = response.path("data").path("Page").path("media");
+                        if (!mediaList.isArray()) return Flux.empty();
+
+                        List<Anime> newAnimes = new ArrayList<>();
+                        List<String> newIds = new ArrayList<>();
+
+                        for (JsonNode node : mediaList) {
+                            Anime anime = mapJsonToEntity(node);
+                            if (anime != null) {
+                                newAnimes.add(anime);
+                                newIds.add(anime.getId());
+                            }
+                        }
+
+                        // REACTIVE MONGO: Lấy data cũ từ DB để merge (Non-blocking)
+                        return animeRepository.findAllById(newIds)
+                                .collectMap(Anime::getId, Function.identity())
+                                .flatMap(existingMap -> {
+                                    for (Anime newAnime : newAnimes) {
+                                        Anime oldAnime = existingMap.get(newAnime.getId());
+                                        if (oldAnime != null) {
+                                            if (newAnime.getCharacters() == null) newAnime.setCharacters(oldAnime.getCharacters());
+                                            if (newAnime.getRelations() == null) newAnime.setRelations(oldAnime.getRelations());
+                                            if (newAnime.getStudios() == null) newAnime.setStudios(oldAnime.getStudios());
+                                            if (newAnime.getRecommendations() == null) newAnime.setRecommendations(oldAnime.getRecommendations());
+                                            if (newAnime.getTrailer() == null) newAnime.setTrailer(oldAnime.getTrailer());
+                                            newAnime.setTitle(mergeTitles(oldAnime.getTitle(), newAnime.getTitle()));
+                                        }
+                                    }
+                                    // Lưu vào DB bằng Reactive SaveAll
+                                    return animeRepository.saveAll(newAnimes).collectList();
+                                })
+                                .doOnSuccess(saved -> log.info("✅ Synced (Merged) {} items from advanced-search", saved.size()));
+                    })
+                    .doOnComplete(() -> log.info("=== END MASTER SYNC ALL ANIME DATA ==="))
+                    .doOnError(error -> log.error("❌ Error during master sync", error))
+                    .subscribe();
+
+            syncSchedules();
+        } catch (Exception e) {
+            log.error("Failed to prepare master sync", e);
+        }
     }
 
-    public void syncFromGraphql(String filename, Map<String, Object> variables) {
-        try {
-            String query = loadGraphqlQuery(filename);
+    private Mono<JsonNode> fetchAnimePage(String query, int page) {
+        // Bạn có thể thêm các biến filter khác (season, status...) vào đây nếu advanced-search.graphql của bạn yêu cầu
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("page", page);
+        variables.put("perPage", 50); // Anilist cho max 50 items/page
+        variables.put("type", "ANIME"); // CHỈ LẤY ANIME (LOẠI BỎ MANGA)
+        variables.put("sort", "POPULARITY_DESC"); // Bật lên nếu file advanced-search.graphql của bạn có nhận biến $sort
 
-            webClient.post()
-                    .bodyValue(Map.of("query", query, "variables", variables))
-                    .retrieve()
-                    .bodyToMono(JsonNode.class)
-                    .subscribe(response -> {
-                        JsonNode mediaList = response.path("data").path("Page").path("media");
-                        if (mediaList.isArray()) {
-                            List<Anime> newAnimes = new ArrayList<>();
-                            List<String> newIds = new ArrayList<>();
-
-                            for (JsonNode node : mediaList) {
-                                Anime anime = mapJsonToEntity(node);
-                                if (anime != null) {
-                                    newAnimes.add(anime);
-                                    newIds.add(anime.getId());
-                                }
-                            }
-
-                            List<Anime> existingAnimes = animeRepository.findAllById(newIds);
-                            Map<String, Anime> existingMap = existingAnimes.stream()
-                                    .collect(Collectors.toMap(Anime::getId, Function.identity()));
-
-                            // ✅ MERGE LOGIC THÔNG MINH
-                            for (Anime newAnime : newAnimes) {
-                                Anime oldAnime = existingMap.get(newAnime.getId());
-                                if (oldAnime != null) {
-                                    // 1. Giữ lại các trường Detail nếu sync mới thiếu
-                                    if (newAnime.getCharacters() == null)
-                                        newAnime.setCharacters(oldAnime.getCharacters());
-                                    if (newAnime.getRelations() == null)
-                                        newAnime.setRelations(oldAnime.getRelations());
-                                    if (newAnime.getStudios() == null)
-                                        newAnime.setStudios(oldAnime.getStudios());
-                                    if (newAnime.getRecommendations() == null)
-                                        newAnime.setRecommendations(oldAnime.getRecommendations());
-                                    if (newAnime.getTrailer() == null)
-                                        newAnime.setTrailer(oldAnime.getTrailer());
-
-                                    // 2. ✅ MERGE TITLE - Giữ field đã có, chỉ thêm field mới
-                                    newAnime.setTitle(mergeTitles(oldAnime.getTitle(), newAnime.getTitle()));
-                                }
-                            }
-
-                            animeRepository.saveAll(newAnimes);
-                            log.info("Synced (Merged) {} items from {}", newAnimes.size(), filename);
-                        }
-                    }, error -> log.error("Error syncing file: " + filename, error));
-
-        } catch (Exception e) {
-            log.error("Failed to prepare sync for " + filename, e);
-        }
+        return webClient.post()
+                .bodyValue(Map.of("query", query, "variables", variables))
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .doOnError(error -> log.error("❌ Error fetching anime page {}", page, error));
     }
 
     // ✅ HÀM MERGE TITLE THÔNG MINH
@@ -142,17 +144,35 @@ public class AnimeSyncService {
                 })
                 .flatMap(anime -> {
                     if (anime != null) {
-                        // ✅ MERGE với data cũ trước khi save
-                        return Mono.justOrEmpty(animeRepository.findById(anime.getId()))
+                        // REACTIVE MONGO MERGE: (Bỏ justOrEmpty vì findById giờ trả về Mono)
+                        return animeRepository.findById(anime.getId())
                                 .map(oldAnime -> {
                                     anime.setTitle(mergeTitles(oldAnime.getTitle(), anime.getTitle()));
                                     return anime;
                                 })
                                 .defaultIfEmpty(anime)
-                                .map(animeRepository::save);
+                                .flatMap(animeRepository::save); // Dùng flatMap vì save trả về Mono<Anime>
                     }
                     return Mono.empty();
                 });
+    }
+
+    // ✅ HÀM BULK ENRICHMENT (Cào đầy đủ data cho 5000 bộ)
+    // Chạy ngầm 1 lần vào lúc 4h sáng. Hàm này sẽ tìm những bộ chưa có "characters" để kéo về dần dần
+    @Scheduled(cron = "0 0 4 * * ?") 
+    public void syncMissingDetailsInBulk() {
+        log.info("=== START BACKGROUND ENRICHMENT (Fetching Missing Details) ===");
+        animeRepository.findAll()
+                // Chỉ tìm những bộ bị thiếu dữ liệu characters
+                .filter(anime -> anime.getCharacters() == null || anime.getCharacters().getEdges() == null || anime.getCharacters().getEdges().isEmpty())
+                .map(Anime::getId)
+                .buffer(3) // Bắn 3 request cùng lúc
+                .delayElements(Duration.ofSeconds(3)) // Đợi 3s để né 429 Limit
+                .flatMap(batch -> Flux.fromIterable(batch)
+                        .flatMap(this::fetchAndSaveAnimeDetail) // Gọi hàm Lazy Load ở trên
+                )
+                .doOnComplete(() -> log.info("=== END BACKGROUND ENRICHMENT ==="))
+                .subscribe();
     }
 
     private Anime mapJsonToEntity(JsonNode node) {

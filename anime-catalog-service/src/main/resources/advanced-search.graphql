@@ -1,5 +1,5 @@
-query ($page: Int = 1, $id: Int, $type: MediaType, $search: String, $format: [MediaFormat], $status: MediaStatus, $countryOfOrigin: CountryCode, $source: MediaSource, $season: MediaSeason, $seasonYear: Int, $year: String, $onList: Boolean, $episodeLesser: Int, $episodeGreater: Int, $genres: [String], $tags: [String], $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
-    Page(page: $page, perPage: 24) {
+query ($page: Int = 1, $perPage: Int = 50, $id: Int, $type: MediaType, $search: String, $format: [MediaFormat], $status: MediaStatus, $countryOfOrigin: CountryCode, $source: MediaSource, $season: MediaSeason, $seasonYear: Int, $year: String, $onList: Boolean, $episodeLesser: Int, $episodeGreater: Int, $genres: [String], $tags: [String], $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+    Page(page: $page, perPage: $perPage) {
         pageInfo {
             total
             perPage
