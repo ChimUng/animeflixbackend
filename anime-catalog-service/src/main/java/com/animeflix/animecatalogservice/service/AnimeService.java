@@ -200,9 +200,9 @@ public class AnimeService {
                                 anime.put("id", schedule.getAnimeId());
                                 if (schedule.getTitle() != null) {
                                     anime.put("title", Map.of(
-                                            "romaji", schedule.getTitle().getRomaji() != null ? schedule.getTitle().getRomaji() : "",
-                                            "english", schedule.getTitle().getEnglish(),
-                                            "native", schedule.getTitle().getNativeTitle() != null ? schedule.getTitle().getNativeTitle() : ""
+                                            "romaji",  schedule.getTitle().getRomaji()     != null ? schedule.getTitle().getRomaji()     : "",
+                                            "english", schedule.getTitle().getEnglish()    != null ? schedule.getTitle().getEnglish()    : "",
+                                            "native",  schedule.getTitle().getNativeTitle() != null ? schedule.getTitle().getNativeTitle() : ""
                                     ));
                                 }
                                 anime.put("episode", schedule.getEpisode());
@@ -223,8 +223,8 @@ public class AnimeService {
                             .collectMap(ScheduleRepository.DayCountProjection::getDay, ScheduleRepository.DayCountProjection::getCount)
                             .map(countsMap -> {
                                 return Arrays.asList(
-                                        "Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư",
-                                        "Thứ năm", "Thứ sáu", "Thứ bảy"
+                                        "Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư",
+                                        "Thứ Năm", "Thứ Sáu", "Thứ Bảy"
                                 ).stream()
                                 .map(day -> Map.of(
                                         "day", (Object) day,

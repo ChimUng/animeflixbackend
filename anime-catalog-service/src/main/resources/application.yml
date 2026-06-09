@@ -8,6 +8,7 @@ spring:
       auto-index-creation: true
     redis:
       url: ${REDIS_URL:rediss://default:gQAAAAAAAf4YAAIgcDFjYzVhM2RmYWU2YTk0MGU4OTQwZDk0NTQ2MmJjODNmNg@primary-buffalo-130584.upstash.io:6379}
+#      url: redis://localhost:6379
 
   kafka:
     bootstrap-servers: localhost:9092
@@ -22,13 +23,16 @@ spring:
         request.timeout.ms: 2000
         # Thời gian chờ phản hồi tối đa từ Broker
         delivery.timeout.ms: 4000
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 app:
   cache:
     anime-detail-ttl: 86400
     list-ttl: 3600
 logging:
   level:
-    root: info
-    # 🎯 Ép Spring Boot in toàn bộ log chi tiết từ Client Kafka ra Terminal
-    org.apache.kafka: DEBUG
-    org.springframework.kafka: DEBUG
+    root: INFO
+    org.apache.kafka: ERROR
+    org.springframework.kafka: ERROR
+    com.animeflix: DEBUG
