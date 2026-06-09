@@ -37,12 +37,12 @@ public class AnimeController {
                         .body(ApiResponse.error(ex.getMessage()))));
     }
 
-    // 2. Top 100
-    @GetMapping("/top100")
-    public Mono<ResponseEntity<ApiResponse<List<AnimeResponse>>>> getTop100Anime(
+    // 2. Popular Anime
+    @GetMapping("/popular")
+    public Mono<ResponseEntity<ApiResponse<List<AnimeResponse>>>> getPopularAnime(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int perPage) {
-        return animeService.getTop100Anime(page, perPage)
+        return animeService.getPopularAnime(page, perPage)
                 .map(data -> ResponseEntity.ok(ApiResponse.ok(data)));
     }
 
@@ -73,12 +73,12 @@ public class AnimeController {
                 .map(data -> ResponseEntity.ok(ApiResponse.ok(data)));
     }
 
-    // 6. Popular Anime
-    @GetMapping("/popular")
-    public Mono<ResponseEntity<ApiResponse<List<AnimeResponse>>>> getPopularAnime(
+    // 6. Top 100
+    @GetMapping("/top100")
+    public Mono<ResponseEntity<ApiResponse<List<AnimeResponse>>>> getTop100Anime(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int perPage) {
-        return animeService.getPopularAnime(page, perPage)
+        return animeService.getTop100Anime(page, perPage)
                 .map(data -> ResponseEntity.ok(ApiResponse.ok(data)));
     }
 
@@ -117,7 +117,7 @@ public class AnimeController {
                         .body(ApiResponse.error("Error searching anime: " + e.getMessage()))));
     }
 
-    // Trong AnimeController — thêm endpoint này
+    // 10.  Trong AnimeController — thêm endpoint này
     @GetMapping("/internal/embed-data")
     public Mono<ResponseEntity<ApiResponse<List<AnimeEmbedDTO>>>> getAnimeForEmbedding(
             @RequestParam(defaultValue = "1") int page,

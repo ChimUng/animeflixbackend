@@ -7,7 +7,7 @@ spring:
       uri: mongodb://localhost:27017/animeflix_catalog
       auto-index-creation: true
     redis:
-      url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
+      url: ${REDIS_URL:rediss://default:gQAAAAAAAf4YAAIgcDFjYzVhM2RmYWU2YTk0MGU4OTQwZDk0NTQ2MmJjODNmNg@primary-buffalo-130584.upstash.io:6379}
 
   kafka:
     bootstrap-servers: localhost:9092
@@ -16,7 +16,19 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.type.mapping: NewEpisodeEvent:com.animeflix.animecatalogservice.DTO.kafka.NewEpisodeEvent
+        # Thời gian tối đa cho phép block luồng để đợi Kafka (Giảm từ 60s xuống 2s)
+        max.block.ms: 2000
+        # Thời gian tối đa để Network Client cố gắng kết nối (2s)
+        request.timeout.ms: 2000
+        # Thời gian chờ phản hồi tối đa từ Broker
+        delivery.timeout.ms: 4000
 app:
   cache:
     anime-detail-ttl: 86400
     list-ttl: 3600
+logging:
+  level:
+    root: info
+    # 🎯 Ép Spring Boot in toàn bộ log chi tiết từ Client Kafka ra Terminal
+    org.apache.kafka: DEBUG
+    org.springframework.kafka: DEBUG

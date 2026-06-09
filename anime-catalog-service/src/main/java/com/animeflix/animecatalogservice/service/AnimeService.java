@@ -71,10 +71,9 @@ public class AnimeService {
                 Mono.defer(() -> { // Sử dụng defer để trì hoãn thực thi cho đến khi subscribe
 
                     // Bước 1: Tìm trong DB
-                    return Mono.justOrEmpty(animeRepository.findById(id))
+                    return animeRepository.findById(id)
                             .flatMap(anime -> {
                                 // Bước 2: Kiểm tra xem data có đủ Detail không?
-                                // Ví dụ: check xem list Character có null không
                                 boolean isMissingDetail = anime.getCharacters() == null ||
                                         anime.getRelations() == null;
 
@@ -102,12 +101,11 @@ public class AnimeService {
     public Mono<List<AnimeResponse>> getPopularAnime(int page, int perPage) {
         String key = "popular:" + page + ":" + perPage;
         return getFromCacheOrDb(key,
-                Mono.fromCallable(() -> {
-                    Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-                    return animeRepository.findAll(pageable).stream()
-                            .map(animeMapper::toResponse)
-                            .collect(Collectors.toList());
-                }),
+                animeRepository.findAll(Sort.by(Sort.Direction.DESC, "popularity"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
                 new TypeReference<>() {}
         );
     }
@@ -116,137 +114,90 @@ public class AnimeService {
     public Mono<List<AnimeResponse>> getTrendingAnime(int page, int perPage) {
         String key = "trending:" + page + ":" + perPage;
         return getFromCacheOrDb(key,
-                Mono.fromCallable(() -> {
-                    Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("averageScore").descending());
-                    return animeRepository.findAll(pageable).stream()
-                            .map(animeMapper::toResponse)
-                            .collect(Collectors.toList());
-                }),
+                animeRepository.findAll(Sort.by(Sort.Direction.DESC, "averageScore"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
                 new TypeReference<>() {}
         );
     }
 
     // 4. Get Movies (Format = MOVIE)
-    public Mono<List<AnimeResponse>> getPopularMovie(int page, int perPage) {
-        String key = "movie:" + page + ":" + perPage;
+    public Mono<List<AnimeResponse>> getPopularMovies(int page, int perPage) {
+        String key = "movies:" + page;
         return getFromCacheOrDb(key,
-                Mono.fromCallable(() -> {
-                    Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-                    return animeRepository.findByFormat("MOVIE", pageable).stream()
-                            .map(animeMapper::toResponse)
-                            .collect(Collectors.toList());
-                }),
+                animeRepository.findByFormat("MOVIE", Sort.by(Sort.Direction.DESC, "popularity"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
                 new TypeReference<>() {}
         );
     }
 
     // 5. Get Season Anime (Ví dụ: WINTER 2024)
-    public Mono<List<AnimeResponse>> getSeasonAnime(int page, int perPage) {
-        // Logic tính season hiện tại
-        Map<String, Object> current = getCurrentSeasonAndYear();
-        String season = (String) current.get("season");
-        Integer year = (Integer) current.get("year");
-
-        String key = "season:" + season + ":" + year + ":" + page;
-
-        return getFromCacheOrDb(key,
-                Mono.fromCallable(() -> {
-                    Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-                    return animeRepository.findBySeasonAndSeasonYear(season, year, pageable).stream()
-                            .map(animeMapper::toResponse)
-                            .collect(Collectors.toList());
-                }),
-                new TypeReference<>() {}
-        );
-    }
-
-    // 6. Get top 100 Anime
-
-    public Mono<List<AnimeResponse>> getTop100Anime(int page, int perPage) {
-        String key = "top100:" + page;
-        return getFromCacheOrDb(key, Mono.fromCallable(() -> {
-            Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("averageScore").descending());
-            return animeRepository.findAll(pageable).getContent().stream()
-                    .map(animeMapper::toResponse)
-                    .limit(100)
-                    .collect(Collectors.toList());
-        }), new TypeReference<>() {});
-    }
-
-    // 7. Get current SeasonAnime
     public Mono<List<AnimeResponse>> getCurrentSeasonAnime(int page, int perPage) {
         Map<String, Object> current = getCurrentSeasonAndYear();
         String season = (String) current.get("season");
         int year = (Integer) current.get("year");
         String key = "currentseason:" + season + ":" + year + ":" + page;
 
-        return getFromCacheOrDb(key, Mono.fromCallable(() -> {
-            Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-            return animeRepository.findBySeasonAndSeasonYear(season, year, pageable)
-                    .stream()
-                    .map(animeMapper::toResponse)
-                    .collect(Collectors.toList());
-        }), new TypeReference<>() {});
+        return getFromCacheOrDb(key,
+                animeRepository.findBySeasonAndSeasonYear(season, year, Sort.by(Sort.Direction.DESC, "popularity"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
+                new TypeReference<>() {}
+        );
     }
 
-    // 8. Get next SeasonAnime
+    // 6. Get top 100 Anime
+    public Mono<List<AnimeResponse>> getTop100Anime(int page, int perPage) {
+        String key = "top100:" + page;
+        return getFromCacheOrDb(key,
+                animeRepository.findAll(Sort.by(Sort.Direction.DESC, "averageScore"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
+                new TypeReference<>() {}
+        );
+    }
+
+    // 7. Get next SeasonAnime
     public Mono<List<AnimeResponse>> getNextSeasonAnime(int page, int perPage) {
         Map<String, Object> next = getNextSeasonAndYear();
         String season = (String) next.get("season");
         int year = (Integer) next.get("year");
         String key = "nextseason:" + season + ":" + year + ":" + page;
 
-        return getFromCacheOrDb(key, Mono.fromCallable(() -> {
-            Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-            return animeRepository.findBySeasonAndSeasonYear(season, year, pageable)
-                    .stream()
-                    .map(animeMapper::toResponse)
-                    .collect(Collectors.toList());
-        }), new TypeReference<>() {});
+        return getFromCacheOrDb(key,
+                animeRepository.findBySeasonAndSeasonYear(season, year, Sort.by(Sort.Direction.DESC, "popularity"))
+                        .skip((long) (page - 1) * perPage)
+                        .take(perPage)
+                        .map(animeMapper::toResponse)
+                        .collectList(),
+                new TypeReference<>() {}
+        );
     }
 
-    // 9. Get Popular Movie Anime
-    public Mono<List<AnimeResponse>> getPopularMovies(int page, int perPage) {
-        String key = "movies:" + page;
-        return getFromCacheOrDb(key, Mono.fromCallable(() -> {
-            Pageable pageable = PageRequest.of(page - 1, perPage, Sort.by("popularity").descending());
-            return animeRepository.findByFormat("MOVIE", pageable)
-                    .stream()
-                    .map(animeMapper::toResponse)
-                    .collect(Collectors.toList());
-        }), new TypeReference<>() {});
-    }
-
-    public Mono<List<AnimeEmbedDTO>> getAnimeForEmbedding(int page, int perPage) {
-        return Mono.fromCallable(() -> {
-            Pageable pageable = PageRequest.of(page - 1, perPage,
-                    Sort.by("popularity").descending());
-            return animeRepository.findAll(pageable).stream()
-                    .map(animeMapper::toEmbedDTO)
-                    .collect(Collectors.toList());
-        });
-    }
-
-    // 10. Get Schedule (Tìm các anime có tập mới trong 7 ngày tới)
+    // 8. Get Schedule (Tìm các anime có tập mới trong 7 ngày tới)
     public Mono<Map<String, Object>> getAnimeSchedule(long airingAtGreater) {
         String key = "schedule:week";
 
         return getFromCacheOrDb(key,
-                Mono.fromCallable(() -> {
+                Mono.defer(() -> {
                     long start = airingAtGreater > 0 ? airingAtGreater : Instant.now().getEpochSecond();
                     long end = Instant.now().plus(Duration.ofDays(7)).getEpochSecond();
 
-                    // Query schedules từ MongoDB
-                    List<AnimeSchedule> schedules = scheduleRepository
-                            .findByAiringAtBetweenOrderByAiringAtAsc(start, end);
-
-                    // Transform sang format response
-                    List<Map<String, Object>> animes = schedules.stream()
+                    // REACTIVE MONGO: Sử dụng Mono.zip để chạy song song 2 query
+                    Mono<List<Map<String, Object>>> animesMono = scheduleRepository
+                            .findByAiringAtBetweenOrderByAiringAtAsc(start, end)
                             .map(schedule -> {
                                 Map<String, Object> anime = new HashMap<>();
                                 anime.put("id", schedule.getAnimeId());
-
-                                // Handle null title
                                 if (schedule.getTitle() != null) {
                                     anime.put("title", Map.of(
                                             "romaji", schedule.getTitle().getRomaji() != null ? schedule.getTitle().getRomaji() : "",
@@ -254,7 +205,6 @@ public class AnimeService {
                                             "native", schedule.getTitle().getNativeTitle() != null ? schedule.getTitle().getNativeTitle() : ""
                                     ));
                                 }
-
                                 anime.put("episode", schedule.getEpisode());
                                 anime.put("airingAt", schedule.getAiringAt());
                                 anime.put("airingTime", schedule.getAiringTime());
@@ -265,43 +215,35 @@ public class AnimeService {
                                 anime.put("episodes", schedule.getEpisodes());
                                 anime.put("bannerImage", schedule.getBannerImage());
                                 anime.put("day", schedule.getDay());
-
                                 return anime;
                             })
-                            .collect(Collectors.toList());
+                            .collectList();
 
-                    // Count by day using aggregation
-                    List<ScheduleRepository.DayCountProjection> dayCounts =
-                            scheduleRepository.countByDay(start, end);
+                    Mono<List<Map<String, Object>>> daysMono = scheduleRepository.countByDay(start, end)
+                            .collectMap(ScheduleRepository.DayCountProjection::getDay, ScheduleRepository.DayCountProjection::getCount)
+                            .map(countsMap -> {
+                                return Arrays.asList(
+                                        "Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư",
+                                        "Thứ năm", "Thứ sáu", "Thứ bảy"
+                                ).stream()
+                                .map(day -> Map.of(
+                                        "day", (Object) day,
+                                        "count", (Object) countsMap.getOrDefault(day, 0L)
+                                ))
+                                .collect(Collectors.toList());
+                            });
 
-                    // Map to count map
-                    Map<String, Long> countsMap = dayCounts.stream()
-                            .collect(Collectors.toMap(
-                                    ScheduleRepository.DayCountProjection::getDay,
-                                    ScheduleRepository.DayCountProjection::getCount
+                    return Mono.zip(animesMono, daysMono)
+                            .map(tuple -> Map.of(
+                                    "animes", tuple.getT1(),
+                                    "days", tuple.getT2()
                             ));
-
-                    // Create days list
-                    List<Map<String, Object>> days = Arrays.asList(
-                                    "Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư",
-                                    "Thứ năm", "Thứ sáu", "Thứ bảy"
-                            ).stream()
-                            .map(day -> Map.of(
-                                    "day", (Object) day,
-                                    "count", (Object) countsMap.getOrDefault(day, 0L)
-                            ))
-                            .collect(Collectors.toList());
-
-                    return Map.of(
-                            "days", days,
-                            "animes", animes
-                    );
                 }),
                 new TypeReference<Map<String, Object>>() {}
         );
     }
 
-    // 11. Search Nâng Cao (Dùng MongoTemplate cho linh động)
+    // 9. Search Nâng Cao (Dùng MongoTemplate cho linh động)
     public Mono<List<AnimeResponse>> searchAnime(String search, Integer year, String season, String format, List<String> genres, String sortBy, int page, int perPage) {
         return Mono.fromCallable(() -> animeSyncService.loadGraphqlQuery("advanced-search.graphql"))
                 .flatMap(query -> {
@@ -358,6 +300,15 @@ public class AnimeService {
                             });
                 })
                 .onErrorResume(ex -> Mono.error(new BusinessException("SEARCH_ERROR", "Failed to search anime: " + ex.getMessage(), "Lỗi tìm kiếm anime")));
+    }
+
+    // 10. Get Embedding Anime for AnimeSync service
+    public Mono<List<AnimeEmbedDTO>> getAnimeForEmbedding(int page, int perPage) {
+        return animeRepository.findAll(Sort.by(Sort.Direction.DESC, "popularity"))
+                .skip((long) (page - 1) * perPage)
+                .take(perPage)
+                .map(animeMapper::toEmbedDTO)
+                .collectList();
     }
 
     // logic caculator day/month/year

@@ -38,9 +38,7 @@ public class EpisodeScheduler {
         long next24h = Instant.now().plus(Duration.ofHours(24)).getEpochSecond();
 
         // Query schedules trong 24 giờ tới
-        Flux<AnimeSchedule> schedules = Flux.fromIterable(
-                scheduleRepository.findByAiringAtBetweenOrderByAiringAtAsc(now, next24h)
-        );
+        Flux<AnimeSchedule> schedules = scheduleRepository.findByAiringAtBetweenOrderByAiringAtAsc(now, next24h);
 
         schedules
                 .flatMap(this::processSchedule)

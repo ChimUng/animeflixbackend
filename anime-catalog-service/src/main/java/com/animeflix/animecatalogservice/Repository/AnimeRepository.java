@@ -15,14 +15,14 @@ import java.util.List;
 public interface AnimeRepository extends ReactiveMongoRepository<Anime, String> {
 
     // Tìm theo Season (cho api /season)
-    Flux<Anime> findBySeasonAndSeasonYear(String season, Integer seasonYear, Pageable pageable);
+    Flux<Anime> findBySeasonAndSeasonYear(String season, Integer seasonYear, org.springframework.data.domain.Sort sort);
 
     // Tìm theo Format (cho api /popularmovie)
-    Flux<Anime> findByFormat(String format, Pageable pageable);
+    Flux<Anime> findByFormat(String format, org.springframework.data.domain.Sort sort);
 
     // Tìm lịch chiếu (Những phim có nextAiringEpisode.airingAt > thời điểm hiện tại)
     @Query("{ 'nextAiringEpisode.airingAt': { $gt: ?0, $lt: ?1 } }")
-    Flux<Anime> findAnimeSchedule(long startTime, long endTime, Pageable pageable);
+    Flux<Anime> findAnimeSchedule(long startTime, long endTime, org.springframework.data.domain.Sort sort);
 
     // Search cơ bản (nếu cần search phức tạp hơn sẽ dùng MongoTemplate)
-    Flux<Anime> findByTitleUserPreferredContainingIgnoreCase(String title, Pageable pageable);}
+    Flux<Anime> findByTitleUserPreferredContainingIgnoreCase(String title, org.springframework.data.domain.Sort sort);}

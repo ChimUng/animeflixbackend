@@ -35,11 +35,11 @@ public class AnimeSyncService {
     private final ScheduleRepository scheduleRepository;
     private final ObjectMapper objectMapper;
 
-    @EventListener(ApplicationReadyEvent.class)
-    public void syncOnStartup() {
-        log.info("=== Ứng dụng đã sẵn sàng - Bắt đầu sync dữ liệu lần đầu ===");
-        syncAllData();
-    }
+//    @EventListener(ApplicationReadyEvent.class)
+//    public void syncOnStartup() {
+//        log.info("=== Ứng dụng đã sẵn sàng - Bắt đầu sync dữ liệu lần đầu ===");
+//        syncAllData();
+//    }
 
     @Scheduled(cron = "0 0 2 * * ?") // Chạy lúc 2h sáng mỗi ngày để cập nhật toàn bộ database
     public void syncAllData() {
@@ -48,11 +48,8 @@ public class AnimeSyncService {
             String query = loadGraphqlQuery("advanced-search.graphql");
 
             Flux.range(1, 100) // 100 trang x 50 = 5000 bộ
-                    .buffer(4) // TĂNG TỐC: Gom 4 trang thành 1 cục (Multi-thread 4 pages cùng lúc)
-                    .delayElements(Duration.ofSeconds(3)) // Đợi 3s giữa các cục để né Rate Limit (80 req/min)
-                    .flatMap(batch -> Flux.fromIterable(batch)
-                            .flatMap(page -> fetchAnimePage(query, page)) // Thực thi songsong 4 request
-                    )
+                    .delayElements(Duration.ofMillis(800)) // Cách 800ms gọi 1 lần (tối đa ~75 req/phút)
+                    .concatMap(page -> fetchAnimePage(query, page))
                     .takeUntil(response -> {
                         boolean hasNextPage = response.path("data").path("Page").path("pageInfo").path("hasNextPage").asBoolean(false);
                         return !hasNextPage;
@@ -114,6 +111,9 @@ public class AnimeSyncService {
                 .bodyValue(Map.of("query", query, "variables", variables))
                 .retrieve()
                 .bodyToMono(JsonNode.class)
+                .retryWhen(reactor.util.retry.Retry.backoff(3, Duration.ofSeconds(10))
+                        .filter(throwable -> throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException.TooManyRequests)
+                        .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> retrySignal.failure()))
                 .doOnError(error -> log.error("❌ Error fetching anime page {}", page, error));
     }
 
@@ -137,7 +137,10 @@ public class AnimeSyncService {
                 .flatMap(query -> webClient.post()
                         .bodyValue(Map.of("query", query, "variables", Map.of("id", Integer.parseInt(id))))
                         .retrieve()
-                        .bodyToMono(JsonNode.class))
+                        .bodyToMono(JsonNode.class)
+                        .retryWhen(reactor.util.retry.Retry.backoff(3, Duration.ofSeconds(10))
+                                .filter(throwable -> throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException.TooManyRequests)
+                                .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> retrySignal.failure())))
                 .map(json -> {
                     JsonNode mediaNode = json.path("data").path("Media");
                     return mapJsonToEntity(mediaNode);
@@ -230,6 +233,7 @@ public class AnimeSyncService {
 
             // ✅ Dùng Flux.range() thay vì Flux.generate()
             Flux.range(1, 10)  // Max 10 pages
+                    .delayElements(Duration.ofMillis(1000)) // CHÌA KHÓA: Tránh spam request liên tục cho schedule
                     .concatMap(page -> fetchSchedulePage(query, page, 50, start, end))
                     .takeUntil(response -> {
                         // Stop khi không còn next page
@@ -259,17 +263,20 @@ public class AnimeSyncService {
                         }
                         return Flux.fromIterable(schedules);
                     })
+                    // REACTIVE MONGO: Kiểm tra trùng lặp qua luồng non-blocking
+                    .filterWhen(schedule -> scheduleRepository.existsByAnimeIdAndEpisode(schedule.getAnimeId(), schedule.getEpisode())
+                            .map(exists -> !exists))
                     .collectList()
-                    .doOnNext(allSchedules -> {
+                    // REACTIVE MONGO: Xóa cũ và Lưu mới theo chuẩn luồng Reactive
+                    .flatMap(allSchedules -> {
                         if (!allSchedules.isEmpty()) {
-                            // Xóa schedules cũ
-                            scheduleRepository.deleteByAiringAtLessThan(start);
-
-                            // Save tất cả schedules mới
-                            List<AnimeSchedule> saved = scheduleRepository.saveAll(allSchedules);
-                            log.info("✅ Synced {} schedules successfully", saved.size());
+                            return scheduleRepository.deleteByAiringAtLessThan(start)
+                                    .thenMany(scheduleRepository.saveAll(allSchedules))
+                                    .collectList()
+                                    .doOnSuccess(saved -> log.info("✅ Synced {} schedules successfully", saved.size()));
                         } else {
                             log.warn("⚠️ No schedules found");
+                            return Mono.empty();
                         }
                     })
                     .doOnError(error -> log.error("❌ Error syncing schedules", error))
@@ -295,6 +302,9 @@ public class AnimeSyncService {
                 .bodyValue(Map.of("query", query, "variables", variables))
                 .retrieve()
                 .bodyToMono(JsonNode.class)
+                .retryWhen(reactor.util.retry.Retry.backoff(3, Duration.ofSeconds(10))
+                        .filter(throwable -> throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException.TooManyRequests)
+                        .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> retrySignal.failure()))
                 .doOnError(error -> log.error("Error fetching schedule page {}", page, error));
     }
 
@@ -305,10 +315,7 @@ public class AnimeSyncService {
             String animeId = mediaNode.path("id").asText();
             Integer episode = node.path("episode").asInt();
 
-            // Check tồn tại để tránh duplicate
-            if (scheduleRepository.existsByAnimeIdAndEpisode(animeId, episode)) {
-                return null;  // Skip nếu đã có
-            }
+            // SỬA LỖI MONO: Bỏ check DB ở đây (chuyển sang filterWhen ở trên)
 
             // Parse title
             Anime.Title title = new Anime.Title();

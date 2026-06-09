@@ -46,6 +46,6 @@ public class AnimeSchedule {
     private LocalDateTime fetchedAt;
 
     // TTL index - MongoDB sẽ tự động xóa document sau expiresAt
-    @Indexed
+    @Indexed(name = "expiresAt_ttl", expireAfter = "0s")
     private Date expiresAt;
 }
