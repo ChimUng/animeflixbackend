@@ -29,24 +29,19 @@ public class EpisodeScheduler {
      * 2. Filter episodes chưa publish
      * 3. Publish Kafka events
      */
-    @Scheduled(cron = "0 */5 * * * ?")
+    @Scheduled(cron = "0 */15 * * * ?")
     public void checkNewEpisodes() {
         log.info("🔍 Checking for new episodes...");
 
-        long startTime = System.currentTimeMillis();
         long now = Instant.now().getEpochSecond();
-        long next24h = Instant.now().plus(Duration.ofHours(24)).getEpochSecond();
+        long next3h = Instant.now().plus(Duration.ofHours(2)).getEpochSecond();
 
         // Query schedules trong 24 giờ tới
-        Flux<AnimeSchedule> schedules = scheduleRepository.findByAiringAtBetweenOrderByAiringAtAsc(now, next24h);
+        Flux<AnimeSchedule> schedules = scheduleRepository.findByAiringAtBetweenOrderByAiringAtAsc(now - 3600, next3h);
 
         schedules
                 .flatMap(this::processSchedule)
                 .reduce(0, Integer::sum)
-                .doOnSuccess(count -> {
-                    long duration = System.currentTimeMillis() - startTime;
-                    log.info("✅ Episode check completed: {} events published in {}ms", count, duration);
-                })
                 .doOnError(error -> log.error("❌ Error checking episodes: {}", error.getMessage()))
                 .subscribe();
     }

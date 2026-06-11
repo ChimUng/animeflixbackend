@@ -57,7 +57,7 @@ services:
 #    ports:
 #      - "8085:8085"
 #    environment:
-#      - spring.data.mongodb.uri=mongodb://mongo:27017/animeflix_auth
+##      - spring.data.mongodb.uri=mongodb://mongo:27017/animeflix_auth
 #      - SPRING_PROFILES_ACTIVE=local
 #    depends_on:
 #      - mongo
@@ -82,7 +82,6 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: animeflix
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     depends_on:
       - kafka
 

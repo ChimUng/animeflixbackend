@@ -11,7 +11,7 @@ spring:
       auto-index-creation: true
 
     redis:
-       url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
+       url: ${REDIS_URL:rediss://default:gQAAAAAAAWu_AAIncDExN2JkMDAzMjQ4OGI0MzQ3OWE3MzQ5YTRiMzc1OTlkZHAxOTMxMTk@devoted-seasnail-93119.upstash.io:6379}
 
   # ✅ Kafka Configuration
   kafka:

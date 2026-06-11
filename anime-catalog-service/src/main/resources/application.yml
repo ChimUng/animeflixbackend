@@ -33,6 +33,6 @@ app:
 logging:
   level:
     root: INFO
-    org.apache.kafka: ERROR
-    org.springframework.kafka: ERROR
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
     com.animeflix: DEBUG

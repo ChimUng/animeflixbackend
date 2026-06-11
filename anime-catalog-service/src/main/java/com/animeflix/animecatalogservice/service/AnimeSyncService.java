@@ -221,7 +221,7 @@ public class AnimeSyncService {
 
     // ✅ Sync Schedules mới: Lấy tất cả schedules trong 7 ngày tới, map và save vào DB
 
-    @Scheduled(cron = "0 0 * * * ?")  // Mỗi 1 tiếng
+    @Scheduled(cron = "0 0 */4 * * ?") // Mỗi 4 tiếng
     public void syncSchedules() {
         log.info("=== START SYNC SCHEDULES (7 days ahead) ===");
 

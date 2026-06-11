@@ -1,0 +1,95 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: ai-search-service
+
+  data:
+    mongodb:
+      uri: mongodb+srv://hongduy1907:hongduy19072005@animeflix-ai-cluster.o2piuon.mongodb.net/animeflix_ai?retryWrites=true&w=majority&appName=AnimeFlix-AI-Cluster
+      auto-index-creation: false
+
+    redis:
+      url: ${REDIS_URL:rediss://default:gQAAAAAAAWu_AAIncDExN2JkMDAzMjQ4OGI0MzQ3OWE3MzQ5YTRiMzc1OTlkZHAxOTMxMTk@devoted-seasnail-93119.upstash.io:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ai-search-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 10
+
+# ==================== EXTERNAL SERVICES ====================
+services:
+  anime-catalog:
+    url: ${ANIME_CATALOG_URL:http://localhost:8080}
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+
+# ==================== GEMINI AI CONFIG ====================
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:AIzaSyC4ckd5qUUlniafbBEifukMkqAWR9MFrZs}
+    base-url: https://generativelanguage.googleapis.com/v1beta
+    embedding-model: gemini-embedding-001          # ← Đổi sang model mới
+    chat-model: gemini-3.1-flash-lite-preview                 # Dùng model mới hơn cho parse
+    # outputDimensionality sẽ được xử lý trong code (không để ở yml)
+
+# ==================== ANILIST ====================
+anilist:
+  api:
+    url: https://graphql.anilist.co
+
+# ==================== SEARCH CONFIG ====================
+search:
+  parser:
+    confidence-threshold: 0.75
+
+  embedding:
+    batch-size: 50
+    rate-limit-delay-ms: 200
+    vector-index-name: vector_index
+    num-candidates: 150
+    limit: 50
+    output-dimensionality: 768
+
+    # Ngưỡng tuyệt đối tối thiểu — loại noise rõ ràng (score < này bị loại)
+    similarity-threshold: 0.78
+
+    # Gap tối thiểu giữa 2 score liền kề để cắt
+    # 0.035 = nếu score gãy ≥ 3.5% → cắt tại đó
+    # Tăng lên 0.05 nếu muốn cắt ít hơn (chỉ cắt khi rất rõ)
+    # Giảm xuống 0.02 nếu muốn cắt nhiều hơn (nhạy hơn)
+    score-gap-threshold: 0.025
+    min-results: 1
+    # Số kết quả tối đa dù score đều cao
+    max-results: 10
+
+  rerank:
+    weights:
+      structured:
+        popularity: 0.35
+        score: 0.30
+        trending: 0.20
+        personalized: 0.15
+      semantic:
+        cosine-similarity: 0.65
+        popularity: 0.15
+        score: 0.10
+        personalized: 0.05
+
+# ==================== KAFKA ====================
+kafka:
+  topics:
+    anime-updated: anime.data.updated
+
+# ==================== LOGGING ====================
+logging:
+  level:
+    com.animeflix.aisearchservice: DEBUG
+    org.springframework.data.mongodb: INFO
+    org.springframework.kafka: WARN
+    org.apache.kafka: OFF
+    org.springframework.web.reactive.function.client: DEBUG
