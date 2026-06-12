@@ -79,7 +79,7 @@ public class EpisodeScheduler {
 
                     // Mark as published (TTL: 30 days)
                     return redisTemplate.opsForValue()
-                            .set(cacheKey, "1", Duration.ofDays(30))
+                            .set(cacheKey, "1", Duration.ofDays(1))
                             .thenReturn(1);
                 });
     }
