@@ -51,7 +51,7 @@ public class Notification {
     private LocalDateTime createdAt;
 
     // TTL - Auto delete after 30 days
-    @Indexed
+    @Indexed(name = "expiresAt_ttl", expireAfter = "0s")
     private Date expiresAt;
 
     public enum NotificationType {

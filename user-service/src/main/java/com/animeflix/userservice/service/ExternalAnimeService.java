@@ -2,6 +2,7 @@ package com.animeflix.userservice.service;
 
 import com.animeflix.userservice.exception.ExternalServiceException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -21,22 +22,18 @@ public class ExternalAnimeService {
     private final WebClient animeCatalogClient;
 
     private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     private static final String CACHE_PREFIX = "anime:";
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
-    /**
-     * Lấy thông tin cơ bản của anime (cho history, continue-watching)
-     */
+    // Lấy thông tin cơ bản anime (cho history, continue-watching) — cache-aside qua Redis
     public Mono<AnimeBasicInfo> getAnimeBasicInfo(String animeId) {
         String cacheKey = CACHE_PREFIX + animeId + ":basic";
 
         return redisTemplate.opsForValue().get(cacheKey)
-                .flatMap(cached -> {
-                    log.debug("Cache hit for anime basic info: {}", animeId);
-                    return parseBasicInfo(cached);
-                })
-                .switchIfEmpty(fetchAnimeBasicInfo(animeId))
+                .flatMap(this::parseBasicInfo)
+                .switchIfEmpty(fetchAndCacheAnimeBasicInfo(animeId, cacheKey))
                 .timeout(Duration.ofSeconds(5))
                 .onErrorResume(e -> {
                     log.warn("Failed to fetch anime info for {}: {}", animeId, e.getMessage());
@@ -44,67 +41,79 @@ public class ExternalAnimeService {
                 });
     }
 
+    private Mono<AnimeBasicInfo> fetchAndCacheAnimeBasicInfo(String animeId, String cacheKey) {
+        return fetchAnimeBasicInfo(animeId)
+                .doOnNext(info -> cacheAnimeInfo(cacheKey, info)
+                        .subscribe(v -> {}, err -> log.warn("Failed to cache anime info {}: {}", animeId, err.getMessage())));
+    }
+
     private Mono<AnimeBasicInfo> fetchAnimeBasicInfo(String animeId) {
         return animeCatalogClient.get()
                 .uri("/{id}", animeId)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .map(response -> {
-                    JsonNode data = response.path("data");
-                    return AnimeBasicInfo.builder()
-                            .id(data.path("id").asText())
-                            .title(data.path("title").path("userPreferred").asText())
-                            .coverImage(data.path("coverImage").path("large").asText())
-                            .bannerImage(data.path("bannerImage").asText())
-                            .totalEpisodes(data.path("episodes").asInt())
-                            .status(data.path("status").asText())
-                            .format(data.path("format").asText())
-                            .build();
-                })
-                .doOnNext(info -> {
-                    // Cache result (async)
-                    cacheAnimeInfo(CACHE_PREFIX + animeId + ":basic", info)
-                            .subscribe();
-                });
+                .map(this::toBasicInfo);
     }
 
-    /**
-     * Lấy chi tiết đầy đủ của anime (cho favorites)
-     */
+    private AnimeBasicInfo toBasicInfo(JsonNode response) {
+        JsonNode data = response.path("data");
+        return AnimeBasicInfo.builder()
+                .id(data.path("id").asText())
+                .title(data.path("title").path("userPreferred").asText())
+                .coverImage(data.path("coverImage").path("large").asText())
+                .bannerImage(data.path("bannerImage").asText())
+                .totalEpisodes(data.path("episodes").asInt())
+                .status(data.path("status").asText())
+                .format(data.path("format").asText())
+                .build();
+    }
+
+    // Lấy chi tiết đầy đủ anime (cho favorites) — KHÔNG cache vì dữ liệu ít khi lặp lại request liên tục
     public Mono<AnimeDetails> getAnimeDetails(String animeId) {
         return animeCatalogClient.get()
                 .uri("/{id}", animeId)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .map(response -> {
-                    JsonNode data = response.path("data");
-                    return AnimeDetails.builder()
-                            .title(data.path("title").path("userPreferred").asText())
-                            .coverImage(data.path("coverImage").path("large").asText())
-                            .bannerImage(data.path("bannerImage").asText())
-                            .status(data.path("status").asText())
-                            .totalEpisodes(data.path("episodes").asInt())
-                            .build();
-                })
+                .map(this::toDetails)
                 .timeout(Duration.ofSeconds(5))
                 .onErrorResume(e -> {
                     log.error("Failed to fetch anime details: {}", e.getMessage());
-                    return Mono.error(new ExternalServiceException(
-                            "Failed to fetch anime details", e));
+                    return Mono.error(new ExternalServiceException("Failed to fetch anime details", e));
                 });
     }
 
+    private AnimeDetails toDetails(JsonNode response) {
+        JsonNode data = response.path("data");
+        return AnimeDetails.builder()
+                .title(data.path("title").path("userPreferred").asText())
+                .coverImage(data.path("coverImage").path("large").asText())
+                .bannerImage(data.path("bannerImage").asText())
+                .status(data.path("status").asText())
+                .totalEpisodes(data.path("episodes").asInt())
+                .build();
+    }
+
+    // Parse JSON từ cache về object — nếu lỗi format thì coi như cache miss
     private Mono<AnimeBasicInfo> parseBasicInfo(String json) {
-        // TODO: Parse JSON từ cache
-        return Mono.empty();
+        try {
+            return Mono.just(objectMapper.readValue(json, AnimeBasicInfo.class));
+        } catch (Exception e) {
+            log.warn("Failed to parse cached anime info, treating as cache miss: {}", e.getMessage());
+            return Mono.empty();
+        }
     }
 
-    private Mono<Void> cacheAnimeInfo(String key, AnimeBasicInfo info) {
-        // TODO: Serialize và cache
-        return Mono.empty();
+    // Serialize object rồi ghi vào Redis với TTL 1 giờ
+    private Mono<Boolean> cacheAnimeInfo(String key, AnimeBasicInfo info) {
+        try {
+            String json = objectMapper.writeValueAsString(info);
+            return redisTemplate.opsForValue().set(key, json, CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("Failed to serialize anime info for caching: {}", e.getMessage());
+            return Mono.just(false);
+        }
     }
 
-    // DTO cho anime basic info
     @lombok.Data
     @lombok.Builder
     @lombok.NoArgsConstructor
@@ -119,7 +128,6 @@ public class ExternalAnimeService {
         private String format;
     }
 
-    // DTO cho anime details
     @lombok.Data
     @lombok.Builder
     @lombok.NoArgsConstructor

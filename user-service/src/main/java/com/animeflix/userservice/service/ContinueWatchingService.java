@@ -26,24 +26,17 @@ public class ContinueWatchingService {
     @Value("${features.continue-watching.max-items:20}")
     private int maxItems;
 
-    /**
-     * Lấy danh sách "Xem tiếp"
-     */
+    // Lấy danh sách "Xem tiếp", giới hạn tối đa maxItems
     public Flux<ContinueWatchingResponse> getContinueWatching(String userId) {
-        return continueRepo.findByUserIdOrderByLastWatchedAtDesc(
-                        userId, PageRequest.of(0, maxItems))
-                .map(mapper::toResponse);
+        return continueRepo.findByUserIdOrderByLastWatchedAtDesc(userId, PageRequest.of(0, maxItems)).map(mapper::toResponse);
     }
 
-    /**
-     * Update từ watch history (called automatically)
-     */
+    // Update từ watch history — được gọi tự động mỗi khi user xem phim (xem WatchHistoryService)
     public Mono<ContinueWatching> updateFromHistory(WatchHistory history) {
-        // Chỉ update nếu chưa xem xong (progress < 0.9)
-        if (history.getCompleted() ||
-                (history.getProgress() != null && history.getProgress() >= 0.9)) {
-            return removeFromContinueWatching(history.getUserId(), history.getAniId())
-                    .then(Mono.empty());
+        boolean finishedWatching = Boolean.TRUE.equals(history.getCompleted()) || (history.getProgress() != null && history.getProgress() >= 0.9);
+
+        if (finishedWatching) {
+            return removeFromContinueWatching(history.getUserId(), history.getAniId()).then(Mono.empty());
         }
 
         return continueRepo.findByUserIdAndAniId(history.getUserId(), history.getAniId())
@@ -57,20 +50,14 @@ public class ContinueWatchingService {
         existing.setEpId(history.getEpId());
         existing.setEpNum(history.getEpNum());
         existing.setEpTitle(history.getEpTitle());
-
         existing.setNextepId(history.getNextepId());
         existing.setNextepNum(history.getNextepNum());
-
         existing.setTimeWatched(history.getTimeWatched());
         existing.setDuration(history.getDuration());
         existing.setProgress(history.getProgress());
 
-        if (history.getProvider() != null) {
-            existing.setProvider(history.getProvider());
-        }
-        if (history.getSubtype() != null) {
-            existing.setSubtype(history.getSubtype());
-        }
+        if (history.getProvider() != null) existing.setProvider(history.getProvider());
+        if (history.getSubtype() != null) existing.setSubtype(history.getSubtype());
 
         existing.setLastWatchedAt(LocalDateTime.now());
         return Mono.just(existing);
@@ -79,52 +66,39 @@ public class ContinueWatchingService {
     private Mono<ContinueWatching> createNew(WatchHistory history) {
         return Mono.just(ContinueWatching.builder()
                 .userId(history.getUserId())
-
                 .aniId(history.getAniId())
                 .aniTitle(history.getAniTitle())
                 .image(history.getImage())
-
                 .epId(history.getEpId())
                 .epNum(history.getEpNum())
                 .epTitle(history.getEpTitle())
-
                 .nextepId(history.getNextepId())
                 .nextepNum(history.getNextepNum())
-
                 .timeWatched(history.getTimeWatched())
                 .duration(history.getDuration())
                 .progress(history.getProgress())
-
                 .provider(history.getProvider())
                 .subtype(history.getSubtype())
-
                 .lastWatchedAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build());
     }
 
-    /**
-     * Xóa khỏi continue watching
-     */
+    // Xóa khỏi continue watching — gọi khi xem xong (>=90%) hoặc user tự xóa
     public Mono<Void> removeFromContinueWatching(String userId, String aniId) {
         return continueRepo.deleteByUserIdAndAniId(userId, aniId);
     }
 
-    /**
-     * Cleanup: Giữ tối đa maxItems, xóa cái cũ nhất
-     */
+    // Giữ tối đa maxItems, xóa cái cũ nhất nếu vượt quá
     private Mono<Void> cleanupOldEntries(String userId) {
         return continueRepo.countByUserId(userId)
-                .flatMap(count -> {
-                    if (count <= maxItems) {
-                        return Mono.empty();
-                    }
+                .flatMap(count -> count <= maxItems ? Mono.empty() : deleteOldest(userId, count - maxItems));
+    }
 
-                    long toDelete = count - maxItems;
-                    return continueRepo.findByUserIdOrderByLastWatchedAtAsc(userId)
-                            .take(toDelete)
-                            .flatMap(continueRepo::delete)
-                            .then();
-                });
+    private Mono<Void> deleteOldest(String userId, long amountToDelete) {
+        return continueRepo.findByUserIdOrderByLastWatchedAtAsc(userId)
+                .take(amountToDelete)
+                .flatMap(continueRepo::delete)
+                .then();
     }
 }

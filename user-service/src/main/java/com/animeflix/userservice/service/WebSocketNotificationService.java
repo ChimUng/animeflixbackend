@@ -10,9 +10,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.ZoneId;
 
-/**
- * ✅ WebSocket Notification Service (Updated for Reactive WebSocket)
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -20,39 +17,31 @@ public class WebSocketNotificationService {
 
     private final NotificationWebSocketHandler webSocketHandler;
 
-    /**
-     * Send notification to specific user via WebSocket
-     * Only sends if user is online
-     */
-    public void sendToUser(String userId, Notification notification) {
-        webSocketHandler.isUserOnline(userId)
-                .subscribe(online -> {
-                    if (Boolean.TRUE.equals(online)) {
-                        WebSocketNotificationMessage message = buildMessage(notification);
-                        webSocketHandler.sendToUser(userId, message);
-                    } else {
-                        log.debug("⏭️ User {} offline, notification stored only", userId);
-                    }
-                });
+    // Gửi realtime tới 1 user, chỉ gửi nếu user đang mở WebSocket (online); trả Mono để caller tự compose/subscribe
+    public Mono<Void> sendToUser(String userId, Notification notification) {
+        return webSocketHandler.isUserOnline(userId).flatMap(online -> online ? pushMessage(userId, notification) : skipOffline(userId));
     }
 
-    /**
-     * Broadcast notification to all online users
-     */
+    private Mono<Void> pushMessage(String userId, Notification notification) {
+        webSocketHandler.sendToUser(userId, buildMessage(notification));
+        return Mono.empty();
+    }
+
+    private Mono<Void> skipOffline(String userId) {
+        log.debug("User {} offline, notification stored only", userId);
+        return Mono.empty();
+    }
+
+    // Broadcast tới toàn bộ user đang online — hiện chưa có endpoint nào gọi, để dành cho tính năng gửi SYSTEM notification toàn hệ thống
     public void broadcast(WebSocketNotificationMessage message) {
         webSocketHandler.broadcast(message);
     }
 
-    /**
-     * Get count of online users
-     */
+    // Đếm số user đang online — hiện chưa có endpoint nào gọi, để dành cho admin dashboard
     public Mono<Long> getOnlineUsersCount() {
         return webSocketHandler.getOnlineUsersCount();
     }
 
-    /**
-     * Build WebSocket message from notification entity
-     */
     private WebSocketNotificationMessage buildMessage(Notification notification) {
         return WebSocketNotificationMessage.builder()
                 .type(notification.getType().name())
@@ -63,10 +52,7 @@ public class WebSocketNotificationService {
                 .animeId(notification.getAnimeId())
                 .episodeNumber(notification.getEpisodeNumber())
                 .actionUrl(notification.getActionUrl())
-                .timestamp(notification.getCreatedAt()
-                        .atZone(ZoneId.systemDefault())
-                        .toInstant()
-                        .toEpochMilli())
+                .timestamp(notification.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
                 .priority("NORMAL")
                 .build();
     }

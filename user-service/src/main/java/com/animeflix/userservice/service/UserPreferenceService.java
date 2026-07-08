@@ -20,32 +20,26 @@ public class UserPreferenceService {
     private final UserPreferenceRepository preferenceRepo;
     private final UserPreferenceMapper mapper;
 
-    /**
-     * Lấy preferences của user (tạo mới nếu chưa có)
-     */
+    // Lấy preferences, tự tạo default nếu user chưa có
     public Mono<UserPreferenceResponse> getPreferences(String userId) {
-        return preferenceRepo.findByUserId(userId)
-                .switchIfEmpty(createDefaultPreferences(userId))
-                .map(mapper::toResponse);
+        return preferenceRepo.findByUserId(userId).switchIfEmpty(createDefaultPreferences(userId)).map(mapper::toResponse);
     }
 
-    /**
-     * Update preferences
-     */
+    // Update preferences, tự tạo default trước nếu chưa có rồi mới apply update
     public Mono<UserPreferenceResponse> updatePreferences(String userId, UpdatePreferencesRequest request) {
         return preferenceRepo.findByUserId(userId)
                 .switchIfEmpty(createDefaultPreferences(userId))
-                .flatMap(preference -> {
-                    mapper.updateEntity(request, preference);
-                    preference.setUpdatedAt(LocalDateTime.now());
-                    return preferenceRepo.save(preference);
-                })
+                .flatMap(preference -> applyUpdate(preference, request))
                 .map(mapper::toResponse);
     }
 
-    /**
-     * Tạo default preferences
-     */
+    private Mono<UserPreference> applyUpdate(UserPreference preference, UpdatePreferencesRequest request) {
+        mapper.updateEntity(request, preference);
+        preference.setUpdatedAt(LocalDateTime.now());
+        return preferenceRepo.save(preference);
+    }
+
+    // Tạo default preferences cho user mới
     private Mono<UserPreference> createDefaultPreferences(String userId) {
         log.info("Creating default preferences for user: {}", userId);
 
@@ -66,12 +60,8 @@ public class UserPreferenceService {
         return preferenceRepo.save(defaultPrefs);
     }
 
-    /**
-     * Check xem user có bật notifications không
-     */
+    // Check user có bật notification không — dùng ở EpisodeEventConsumer trước khi tạo notification
     public Mono<Boolean> isNotificationEnabled(String userId) {
-        return preferenceRepo.findByUserId(userId)
-                .map(UserPreference::getEnableNotifications)
-                .defaultIfEmpty(true);
+        return preferenceRepo.findByUserId(userId).map(UserPreference::getEnableNotifications).defaultIfEmpty(true);
     }
 }

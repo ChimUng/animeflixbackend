@@ -19,23 +19,19 @@ public class UserPreferenceController {
 
     private final UserPreferenceService preferenceService;
 
+    // Lấy preferences, tự tạo default nếu user chưa có
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<UserPreferenceResponse>>> getPreferences(
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<UserPreferenceResponse>>> getPreferences(ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(preferenceService::getPreferences)
                 .map(response -> ResponseEntity.ok(ApiResponse.success(response)));
     }
 
+    // Update preferences
     @PutMapping
-    public Mono<ResponseEntity<ApiResponse<UserPreferenceResponse>>> updatePreferences(
-            @Valid @RequestBody UpdatePreferencesRequest request,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<UserPreferenceResponse>>> updatePreferences(@Valid @RequestBody UpdatePreferencesRequest request, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(userId -> preferenceService.updatePreferences(userId, request))
-                .map(response -> ResponseEntity.ok(ApiResponse.success(
-                        "Preferences updated successfully", response)));
+                .map(response -> ResponseEntity.ok(ApiResponse.success("Preferences updated successfully", response)));
     }
 }

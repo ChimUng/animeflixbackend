@@ -19,24 +19,20 @@ public class ContinueWatchingController {
 
     private final ContinueWatchingService continueWatchingService;
 
+    // Lấy danh sách "Xem tiếp"
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<ContinueWatchingResponse>>>> getContinueWatching(
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<List<ContinueWatchingResponse>>>> getContinueWatching(ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMapMany(continueWatchingService::getContinueWatching)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list)));
     }
 
+    // Xóa 1 anime khỏi "Xem tiếp"
     @DeleteMapping("/{aniId}")
-    public Mono<ResponseEntity<ApiResponse<Void>>> removeFromContinueWatching(
-            @PathVariable String aniId,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<Void>>> removeFromContinueWatching(@PathVariable String aniId, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(userId -> continueWatchingService.removeFromContinueWatching(userId, aniId))
-                .then(Mono.just(ResponseEntity.ok(
-                        ApiResponse.success("Removed from continue watching", null))));
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("Removed from continue watching", null))));
     }
 }

@@ -13,11 +13,6 @@ import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAd
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * ✅ WebFlux WebSocket Configuration (Reactive)
- *
- * Endpoint: ws://localhost:8081/ws/notifications?userId=<userId>
- */
 @Configuration
 @RequiredArgsConstructor
 @Slf4j

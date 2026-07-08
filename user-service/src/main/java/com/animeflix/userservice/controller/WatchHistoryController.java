@@ -21,56 +21,45 @@ public class WatchHistoryController {
 
     private final WatchHistoryService historyService;
 
+    // Ghi nhận tiến độ xem (được FE gọi định kỳ khi đang xem phim)
     @PostMapping
-    public Mono<ResponseEntity<ApiResponse<WatchHistoryResponse>>> addHistory(
-            @Valid @RequestBody AddHistoryRequest request,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<WatchHistoryResponse>>> addHistory(@Valid @RequestBody AddHistoryRequest request, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(userId -> historyService.addOrUpdateHistory(userId, request))
-                .map(response -> ResponseEntity.ok(ApiResponse.success(
-                        "Watch history updated successfully", response)));
+                .map(response -> ResponseEntity.ok(ApiResponse.success("Watch history updated successfully", response)));
     }
 
+    // Lấy lịch sử xem (phân trang)
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<WatchHistoryResponse>>>> getHistory(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<List<WatchHistoryResponse>>>> getHistory(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMapMany(userId -> historyService.getHistory(userId, page, size))
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list)));
     }
 
+    // Lấy lịch sử xem của 1 anime cụ thể
     @GetMapping("/anime/{aniId}")
-    public Mono<ResponseEntity<ApiResponse<List<WatchHistoryResponse>>>> getHistoryByAnime(
-            @PathVariable String aniId,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<List<WatchHistoryResponse>>>> getHistoryByAnime(@PathVariable String aniId, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMapMany(userId -> historyService.getHistoryByAnime(userId, aniId))
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list)));
     }
 
+    // Xóa lịch sử của 1 anime
     @DeleteMapping("/anime/{aniId}")
-    public Mono<ResponseEntity<ApiResponse<Void>>> deleteByAnime(
-            @PathVariable String aniId,
-            ServerWebExchange exchange) {
-
+    public Mono<ResponseEntity<ApiResponse<Void>>> deleteByAnime(@PathVariable String aniId, ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(userId -> historyService.deleteByAnime(userId, aniId))
-                .then(Mono.just(ResponseEntity.ok(
-                        ApiResponse.success("History deleted successfully", null))));
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("History deleted successfully", null))));
     }
 
+    // Xóa toàn bộ lịch sử
     @DeleteMapping
     public Mono<ResponseEntity<ApiResponse<Void>>> clearHistory(ServerWebExchange exchange) {
         return SecurityContextUtil.getCurrentUserId(exchange)
                 .flatMap(historyService::clearHistory)
-                .then(Mono.just(ResponseEntity.ok(
-                        ApiResponse.success("All history cleared", null))));
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("All history cleared", null))));
     }
 }

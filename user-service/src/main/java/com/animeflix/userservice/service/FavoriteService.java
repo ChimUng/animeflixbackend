@@ -26,43 +26,39 @@ public class FavoriteService {
     private final FavoriteMapper mapper;
     private final ExternalAnimeService animeService;
 
-    /**
-     * Thêm vào yêu thích
-     */
+    // 1. Thêm vào yêu thích, chặn trùng nếu đã tồn tại
     public Mono<FavoriteResponse> addFavorite(String userId, AddFavoriteRequest request) {
-        log.debug("Adding favorite for user: {}, anime: {}", userId, request.getAnimeId());
-
         return favoriteRepo.existsByUserIdAndAnimeId(userId, request.getAnimeId())
-                .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new DuplicateResourceException(
-                                "Anime already in favorites"));
-                    }
-                    return createFavorite(userId, request);
-                })
+                .flatMap(exists -> exists ? Mono.error(new DuplicateResourceException("Anime already in favorites")) : createFavorite(userId, request))
                 .flatMap(favoriteRepo::save)
                 .map(mapper::toResponse);
     }
 
+    // 1a. Nếu request đã có sẵn info anime thì dùng luôn, không thì gọi catalog-service để lấy
     private Mono<Favorite> createFavorite(String userId, AddFavoriteRequest request) {
-        // Nếu request có sẵn anime info thì dùng, không thì fetch từ catalog-service
         if (request.getAnimeTitle() != null) {
             return Mono.just(buildFavorite(userId, request));
         }
-
         return animeService.getAnimeDetails(request.getAnimeId())
-                .map(animeDetails -> {
-                    request.setAnimeTitle(animeDetails.getTitle());
-                    request.setCoverImage(animeDetails.getCoverImage());
-                    request.setBannerImage(animeDetails.getBannerImage());
-                    request.setStatus(animeDetails.getStatus());
-                    request.setTotalEpisodes(animeDetails.getTotalEpisodes());
-                    return buildFavorite(userId, request);
-                })
-                .onErrorResume(e -> {
-                    log.warn("Failed to fetch anime details, creating favorite without denormalized data");
-                    return Mono.just(buildFavorite(userId, request));
-                });
+                .map(details -> enrichRequest(request, details))
+                .map(enriched -> buildFavorite(userId, enriched))
+                .onErrorResume(e -> fallbackWithoutDetails(userId, request, e));
+    }
+
+    // 1b. Gán thông tin denormalized (title, cover, banner...) từ catalog-service vào request
+    private AddFavoriteRequest enrichRequest(AddFavoriteRequest request, ExternalAnimeService.AnimeDetails details) {
+        request.setAnimeTitle(details.getTitle());
+        request.setCoverImage(details.getCoverImage());
+        request.setBannerImage(details.getBannerImage());
+        request.setStatus(details.getStatus());
+        request.setTotalEpisodes(details.getTotalEpisodes());
+        return request;
+    }
+
+    // 1c. Nếu catalog-service lỗi/timeout, vẫn cho tạo favorite nhưng thiếu data denormalized
+    private Mono<Favorite> fallbackWithoutDetails(String userId, AddFavoriteRequest request, Throwable e) {
+        log.warn("Failed to fetch anime details, creating favorite without denormalized data: {}", e.getMessage());
+        return Mono.just(buildFavorite(userId, request));
     }
 
     private Favorite buildFavorite(String userId, AddFavoriteRequest request) {
@@ -80,76 +76,53 @@ public class FavoriteService {
                 .build();
     }
 
-    /**
-     * Lấy danh sách yêu thích (phân trang)
-     */
+    // 2. Lấy danh sách yêu thích (phân trang)
     public Flux<FavoriteResponse> getFavorites(String userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return favoriteRepo.findByUserIdOrderByAddedAtDesc(userId, pageable)
-                .map(mapper::toResponse);
+        return favoriteRepo.findByUserIdOrderByAddedAtDesc(userId, pageable).map(mapper::toResponse);
     }
 
-    /**
-     * Lấy tất cả yêu thích (không phân trang)
-     */
+    // Lấy tất cả yêu thích, không phân trang
     public Flux<FavoriteResponse> getAllFavorites(String userId) {
-        return favoriteRepo.findByUserIdOrderByAddedAtDesc(userId)
-                .map(mapper::toResponse);
+        return favoriteRepo.findByUserIdOrderByAddedAtDesc(userId).map(mapper::toResponse);
     }
 
-    /**
-     * Kiểm tra đã yêu thích chưa
-     */
+    // 3. Kiểm tra đã yêu thích chưa — dùng để hiện icon trái tim ở FE
     public Mono<Boolean> isFavorite(String userId, String animeId) {
         return favoriteRepo.existsByUserIdAndAnimeId(userId, animeId);
     }
 
-    /**
-     * Xóa khỏi yêu thích
-     */
+    // 4. Xóa khỏi yêu thích
     public Mono<Void> removeFavorite(String userId, String animeId) {
         return favoriteRepo.existsByUserIdAndAnimeId(userId, animeId)
-                .flatMap(exists -> {
-                    if (!exists) {
-                        return Mono.error(new ResourceNotFoundException(
-                                "Anime not found in favorites"));
-                    }
-                    return favoriteRepo.deleteByUserIdAndAnimeId(userId, animeId);
-                });
+                .flatMap(exists -> exists ? favoriteRepo.deleteByUserIdAndAnimeId(userId, animeId) : Mono.error(new ResourceNotFoundException("Anime not found in favorites")));
     }
 
-    /**
-     * Toggle notification cho anime yêu thích
-     */
+    // 5. Bật/tắt nhận thông báo tập mới cho 1 anime yêu thích
     public Mono<FavoriteResponse> toggleNotification(String userId, String animeId) {
         return favoriteRepo.findByUserIdAndAnimeId(userId, animeId)
-                .switchIfEmpty(Mono.error(new ResourceNotFoundException(
-                        "Anime not found in favorites")))
-                .flatMap(favorite -> {
-                    favorite.setNotifyNewEpisode(!favorite.getNotifyNewEpisode());
-                    favorite.setUpdatedAt(LocalDateTime.now());
-                    return favoriteRepo.save(favorite);
-                })
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Anime not found in favorites")))
+                .flatMap(this::flipNotifyFlag)
                 .map(mapper::toResponse);
     }
 
-    /**
-     * Đếm số anime yêu thích
-     */
+    private Mono<Favorite> flipNotifyFlag(Favorite favorite) {
+        favorite.setNotifyNewEpisode(!favorite.getNotifyNewEpisode());
+        favorite.setUpdatedAt(LocalDateTime.now());
+        return favoriteRepo.save(favorite);
+    }
+
+    // Đếm số anime yêu thích ở UserStarController
     public Mono<Long> countFavorites(String userId) {
         return favoriteRepo.countByUserId(userId);
     }
 
-    /**
-     * Lấy danh sách favorites có bật thông báo (cho scheduler)
-     */
-    public Flux<Favorite> getFavoritesWithNotification() {
-        return favoriteRepo.findByNotifyNewEpisodeTrue();
+    // Lấy user cần thông báo cho 1 anime cụ thể — dùng ở EpisodeEventConsumer khi có tập mới
+    public Flux<Favorite> getFavoritesToNotify(String animeId) {
+        return favoriteRepo.findByAnimeIdAndNotifyNewEpisodeTrue(animeId);
     }
 
-    /**
-     * Lấy favorites có bật thông báo của user
-     */
+    // Lấy favorites có bật thông báo của 1 user — dùng ở trang quản lý thông báo cá nhân
     public Flux<Favorite> getUserFavoritesWithNotification(String userId) {
         return favoriteRepo.findByUserIdAndNotifyNewEpisodeTrue(userId);
     }
